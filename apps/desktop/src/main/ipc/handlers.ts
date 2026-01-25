@@ -1331,31 +1331,33 @@ export function registerIPCHandlers(): void {
     baseUrl: string,
     modelId: string
   ): Promise<ToolSupportStatus> {
+    // Use a time-based tool that the model cannot answer without calling
+    // Combined with tool_choice: 'required' to force tool usage if supported
     const testPayload = {
       model: modelId,
       messages: [
-        { role: 'user', content: 'What is 2+2? Use the calculator tool to answer.' }
+        { role: 'user', content: 'What is the current time? You must use the get_current_time tool.' }
       ],
       tools: [
         {
           type: 'function',
           function: {
-            name: 'calculator',
-            description: 'Performs basic arithmetic operations',
+            name: 'get_current_time',
+            description: 'Gets the current time. Must be called to know what time it is.',
             parameters: {
               type: 'object',
               properties: {
-                expression: {
+                timezone: {
                   type: 'string',
-                  description: 'The math expression to evaluate'
+                  description: 'Timezone (e.g., UTC, America/New_York)'
                 }
               },
-              required: ['expression']
+              required: []
             }
           }
         }
       ],
-      tool_choice: 'auto',
+      tool_choice: 'required',
       max_tokens: 100,
     };
 
@@ -1405,9 +1407,10 @@ export function registerIPCHandlers(): void {
         return 'supported';
       }
 
-      // Model responded but didn't use tools - might support them but chose not to
-      console.log(`[Ollama] Model ${modelId} accepted tool request (marking as supported)`);
-      return 'supported';
+      // Model responded but didn't use tools despite tool_choice: 'required'
+      // This likely means the model doesn't actually support tools (just ignored the param)
+      console.log(`[Ollama] Model ${modelId} did not make tool call despite required - marking as unknown`);
+      return 'unknown';
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
@@ -1915,31 +1918,33 @@ export function registerIPCHandlers(): void {
     baseUrl: string,
     modelId: string
   ): Promise<ToolSupportStatus> {
+    // Use a time-based tool that the model cannot answer without calling
+    // Combined with tool_choice: 'required' to force tool usage if supported
     const testPayload = {
       model: modelId,
       messages: [
-        { role: 'user', content: 'What is 2+2? Use the calculator tool to answer.' }
+        { role: 'user', content: 'What is the current time? You must use the get_current_time tool.' }
       ],
       tools: [
         {
           type: 'function',
           function: {
-            name: 'calculator',
-            description: 'Performs basic arithmetic operations',
+            name: 'get_current_time',
+            description: 'Gets the current time. Must be called to know what time it is.',
             parameters: {
               type: 'object',
               properties: {
-                expression: {
+                timezone: {
                   type: 'string',
-                  description: 'The math expression to evaluate'
+                  description: 'Timezone (e.g., UTC, America/New_York)'
                 }
               },
-              required: ['expression']
+              required: []
             }
           }
         }
       ],
-      tool_choice: 'auto',
+      tool_choice: 'required',
       max_tokens: 100,
     };
 
@@ -1989,10 +1994,10 @@ export function registerIPCHandlers(): void {
         return 'supported';
       }
 
-      // Model responded but didn't use tools - might support them but chose not to
-      // We'll mark as supported since the request didn't error
-      console.log(`[LM Studio] Model ${modelId} accepted tool request (marking as supported)`);
-      return 'supported';
+      // Model responded but didn't use tools despite tool_choice: 'required'
+      // This likely means the model doesn't actually support tools (just ignored the param)
+      console.log(`[LM Studio] Model ${modelId} did not make tool call despite required - marking as unknown`);
+      return 'unknown';
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
