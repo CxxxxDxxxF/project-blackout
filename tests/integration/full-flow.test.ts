@@ -12,7 +12,7 @@ import * as os from 'os';
  *
  * Note: These tests require better-sqlite3 native module. If the native module
  * is not available (Node.js version mismatch), tests will be skipped.
- * To fix native module issues, run: pnpm rebuild better-sqlite3
+ * To fix native module issues,run: pnpm rebuild better-sqlite3
  */
 
 describe('Core Package Integration', () => {
