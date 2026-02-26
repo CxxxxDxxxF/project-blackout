@@ -225,9 +225,8 @@ function OllamaModelManager({
           <code className="font-mono bg-muted px-1 rounded">llama3.2:3b</code>
         </p>
         <div className="rounded-md border border-border bg-muted/20 p-2 text-xs text-muted-foreground">
-          Need setup help? Run{' '}
-          <code className="font-mono rounded bg-muted px-1">ollama serve</code>, then{' '}
-          <code className="font-mono rounded bg-muted px-1">ollama pull llama3.2:3b</code>.
+          Need setup help? Run <code className="font-mono rounded bg-muted px-1">ollama serve</code>
+          , then <code className="font-mono rounded bg-muted px-1">ollama pull llama3.2:3b</code>.
         </div>
         <div className="flex gap-2">
           <input

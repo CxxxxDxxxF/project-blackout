@@ -222,9 +222,8 @@ function inferOllamaName(modelName?: string): string | undefined {
 
   // Common HF -> Ollama mapping for popular Qwen variants.
   const lower = trimmed.toLowerCase();
-  const qwenMatch = /^qwen\/qwen(?:2(?:\.5)?)?-?(?:coder-)?(\d+(?:\.\d+)?)b(?:-instruct)?(?:-awq)?$/i.exec(
-    trimmed,
-  );
+  const qwenMatch =
+    /^qwen\/qwen(?:2(?:\.5)?)?-?(?:coder-)?(\d+(?:\.\d+)?)b(?:-instruct)?(?:-awq)?$/i.exec(trimmed);
   if (qwenMatch) {
     const size = qwenMatch[1];
     const isCoder = lower.includes('coder');

@@ -66,7 +66,9 @@ async function main() {
   try {
     startOllamaDetached();
   } catch (error) {
-    console.error(`[ollama] Failed to start: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[ollama] Failed to start: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   }
 

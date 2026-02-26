@@ -218,9 +218,7 @@ export function OllamaProviderForm({
       const result = await accomplish.testOllamaConnection(serverUrl);
 
       if (!result.success) {
-        setError(
-          mapOllamaConnectionError(result.error || t('status.connectionFailed'), serverUrl),
-        );
+        setError(mapOllamaConnectionError(result.error || t('status.connectionFailed'), serverUrl));
         setConnecting(false);
         return;
       }

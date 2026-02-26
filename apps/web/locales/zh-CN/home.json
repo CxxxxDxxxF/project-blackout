@@ -12,50 +12,80 @@
   },
   "examplePrompts": "示例任务",
   "useCases": {
-    "calendarPrepNotes": {
-      "title": "会议准备笔记",
-      "description": "查看明天的会议并起草准备笔记。",
-      "prompt": "检查我 Google 日历上明天的会议，并在新的 Google 文档中起草准备笔记。"
+    "repoOnboardingChecklist": {
+      "title": "仓库上手清单",
+      "description": "快速提炼新代码库的环境、脚本与架构。",
+      "prompt": "扫描这个仓库并输出新工程师上手清单：安装步骤、关键脚本、架构图和首批可做任务。"
     },
-    "inboxPromoCleanup": {
-      "title": "清理促销邮件",
-      "description": "清理过去 24 小时内的促销邮件。",
-      "prompt": "进入我的 Gmail 收件箱，删除过去 24 小时内的所有促销邮件。"
+    "prReviewAssistant": {
+      "title": "PR 评审助手",
+      "description": "按严重级别梳理问题、风险和缺失测试。",
+      "prompt": "审阅这个 PR 的 diff，给出按严重级别排序的问题列表、回归风险和缺失测试，并附文件位置。"
     },
-    "competitorPricingDeck": {
-      "title": "竞品定价分析",
-      "description": "分析竞品定价并起草建议幻灯片。",
-      "prompt": "从这 5 个竞品网站 [URL列表] 获取定价和功能信息，保存到 CSV，分析我们的定价差距，并在 Google 幻灯片中为周一会议起草建议幻灯片。"
+    "bugReproPlan": {
+      "title": "缺陷复现方案",
+      "description": "把 bug 描述转成可执行复现步骤。",
+      "prompt": "根据这条 bug 工单，输出精确复现步骤、可能根因假设和最小化排查清单。"
     },
-    "notionApiAudit": {
-      "title": "Notion API 审计",
-      "description": "扫描 Notion Wiki 中的旧 API 引用并提供链接。",
-      "prompt": "阅读 [URL] 上的这个 Notion Wiki，找到所有旧 API 的引用，并列出页面链接。"
+    "apiContractDiff": {
+      "title": "API 合约差异",
+      "description": "对比 API 版本并识别破坏性变更。",
+      "prompt": "对比 API v1 与 v2 规范，生成迁移报告：破坏性变更、安全默认值、客户端需要修改的点。"
     },
-    "stagingVsProdVisual": {
-      "title": "测试环境与生产环境对比",
-      "description": "对比测试和生产环境的视觉差异并截图。",
-      "prompt": "对比 [URL] 上的测试站点和 [URL] 上的生产站点，截取任何视觉差异。"
+    "testFailureTriage": {
+      "title": "测试失败分诊",
+      "description": "聚类 CI 失败并给出最小修复方案。",
+      "prompt": "分析当前 CI 测试失败，按根因分组，并给出最小且安全的修复计划与验证命令。"
     },
-    "prodBrokenLinks": {
-      "title": "检测失效链接",
-      "description": "检查网站中的失效链接。",
-      "prompt": "打开 [URL]，点击每个链接，并报告任何 404 错误。"
+    "releaseNotesFromCommits": {
+      "title": "提交生成发布说明",
+      "description": "将提交记录整理为对外发布说明。",
+      "prompt": "根据最近两周提交记录生成发布说明，按功能、修复、破坏性变更分组并使用用户可读语言。"
     },
-    "portfolioMonitoring": {
-      "title": "投资组合监控",
-      "description": "监控股价，在下跌和上涨时发出警报。",
-      "prompt": "监控我在 [券商网站] 上的股票投资组合，在价格下跌和上涨时发出警报。"
+    "promptEvalBatch": {
+      "title": "提示词评测矩阵",
+      "description": "为 AI 助手建立结构化评测集。",
+      "prompt": "为我的助手设计提示词评测矩阵：20 个测试用例、预期输出、评分标准和失败分类。"
     },
-    "jobApplicationAutomation": {
-      "title": "求职申请自动化",
-      "description": "筛选职位并使用保存的资料提交申请。",
-      "prompt": "从 Indeed 查找 [关键词] 的职位列表，按薪资排序，并使用我的资料申请前 5 个。"
+    "aiSupportCopilot": {
+      "title": "AI 客服副驾",
+      "description": "沉淀高复用客服回复模板。",
+      "prompt": "分析最近客服会话，产出可复用回复模板，并定义常见问题的升级规则。"
     },
-    "eventCalendarBuilder": {
-      "title": "活动日程构建",
-      "description": "选择热门活动并添加到日历。",
-      "prompt": "从 Eventbrite 抓取活动列表，按地点筛选，并将前 5 个添加到我的日历。"
+    "ragKnowledgeCleanup": {
+      "title": "RAG 知识库清理",
+      "description": "识别过期文档并给出清理优先级。",
+      "prompt": "审计我们的知识库，找出过期或重复文档，并输出按优先级排序的清理计划（负责人与截止时间）。"
+    },
+    "agentRunbookDraft": {
+      "title": "Agent 运维手册",
+      "description": "生成生产级 AI Agent 运维手册。",
+      "prompt": "为这个 AI Agent 起草值班手册：健康检查、回滚步骤、常见事故与恢复命令。"
+    },
+    "internWeekPlan": {
+      "title": "实习生周计划",
+      "description": "制定可落地的实习生周度成长路径。",
+      "prompt": "创建 6 周实习生上手计划，包含项目里程碑、导师检查点和可量化结果。"
+    },
+    "internPortfolioReview": {
+      "title": "实习项目评审",
+      "description": "评估实习项目并给出改进建议。",
+      "prompt": "评审这些实习项目摘要，输出代码质量、业务影响和下一步建议。"
+    },
+    "internProjectScoping": {
+      "title": "实习项目定范围",
+      "description": "定义边界清晰、可交付的实习项目。",
+      "prompt": "提出 5 个适合实习生的工程项目，包含范围、约束、验收标准与风险等级。"
+    },
+    "internBugBash": {
+      "title": "实习生 Bug Bash",
+      "description": "生成实习生可执行的找错清单。",
+      "prompt": "为实习生生成 bug bash 清单：功能区域、测试场景、严重级别标签和提报模板。"
+    },
+    "internDemoPrep": {
+      "title": "实习成果 Demo 准备",
+      "description": "整理实习项目展示故事线和幻灯片。",
+      "prompt": "把这个实习项目整理成 demo 脚本和幻灯片大纲：问题、实现、结果、经验和下一步。"
     }
   }
 }

@@ -12,50 +12,80 @@
   },
   "examplePrompts": "Example Prompts",
   "useCases": {
-    "calendarPrepNotes": {
-      "title": "Calendar Prep Notes",
-      "description": "Review tomorrow's meetings and draft a prep notes doc.",
-      "prompt": "Check my Google Calendar for tomorrow's meetings and draft preparation notes in a new Google Doc."
+    "repoOnboardingChecklist": {
+      "title": "Repo Onboarding Checklist",
+      "description": "Summarize setup, scripts, and architecture from a new codebase.",
+      "prompt": "Scan this repository and create an onboarding checklist for a new engineer: setup steps, key scripts, architecture map, and first good issues."
     },
-    "inboxPromoCleanup": {
-      "title": "Inbox Promo Cleanup",
-      "description": "Clear promotional emails from the last 24 hours.",
-      "prompt": "Go to my Gmail inbox and delete all promotional emails from the last 24 hours."
+    "prReviewAssistant": {
+      "title": "PR Review Assistant",
+      "description": "Review a pull request for bugs, risks, and test gaps.",
+      "prompt": "Review this PR diff and produce a severity-ranked list of issues, regression risks, and missing tests with file references."
     },
-    "competitorPricingDeck": {
-      "title": "Competitor Pricing Deck",
-      "description": "Analyze competitor pricing and draft a slide with recommendations.",
-      "prompt": "Pull pricing and features from these 5 competitor sites [list URLs], save to a CSV, analyze our pricing gaps, and draft a recommendation slide in Google Slides for Monday's meeting."
+    "bugReproPlan": {
+      "title": "Bug Repro Plan",
+      "description": "Turn a bug ticket into reproducible steps and hypotheses.",
+      "prompt": "Given this bug ticket, generate exact reproduction steps, likely root-cause hypotheses, and a minimal debugging checklist."
     },
-    "notionApiAudit": {
-      "title": "Notion API Audit",
-      "description": "Scan a Notion wiki for old API mentions with direct links.",
-      "prompt": "Read through this Notion wiki at [URL] and find all mentions of the old API, listing them with page links."
+    "apiContractDiff": {
+      "title": "API Contract Diff",
+      "description": "Compare API versions and identify breaking changes.",
+      "prompt": "Compare API v1 and v2 specs and output a migration report: breaking changes, safe defaults, and required client updates."
     },
-    "stagingVsProdVisual": {
-      "title": "Staging vs Prod Visual Check",
-      "description": "Compare staging and production visuals with screenshots.",
-      "prompt": "Compare my staging site at [URL] to production at [URL] and screenshot any visual differences."
+    "testFailureTriage": {
+      "title": "Test Failure Triage",
+      "description": "Cluster failing tests and propose high-confidence fixes.",
+      "prompt": "Analyze current CI test failures, group by root cause, and propose the smallest safe fix plan with commands to validate."
     },
-    "prodBrokenLinks": {
-      "title": "Production Broken Links",
-      "description": "Check my website for broken links.",
-      "prompt": "Open [URL], click through every link, and report any 404 errors."
+    "releaseNotesFromCommits": {
+      "title": "Release Notes From Commits",
+      "description": "Convert commit history into clean release notes.",
+      "prompt": "Generate release notes from the last two weeks of commits grouped by feature, fix, and breaking change with user-facing language."
     },
-    "portfolioMonitoring": {
-      "title": "Portfolio Monitoring",
-      "description": "Watch stock prices, and alert on drops and spikes.",
-      "prompt": "Monitor my stock portfolio on [broker site], alert on price drops and spikes."
+    "promptEvalBatch": {
+      "title": "Prompt Eval Batch",
+      "description": "Run a structured eval matrix for assistant prompts.",
+      "prompt": "Create a prompt evaluation matrix with 20 test cases, expected outputs, scoring rubric, and failure categories for my assistant."
     },
-    "jobApplicationAutomation": {
-      "title": "Job Application Automation",
-      "description": "Filter jobs and submit applications with saved profiles.",
-      "prompt": "Find job listings from Indeed for [query], sort by salary, and apply to the top 5 using my profile."
+    "aiSupportCopilot": {
+      "title": "AI Support Copilot",
+      "description": "Draft response templates for recurring support issues.",
+      "prompt": "Analyze recent support threads and create reusable response templates plus escalation rules for common issues."
     },
-    "eventCalendarBuilder": {
-      "title": "Event Calendar Builder",
-      "description": "Select top events and add them to the calendar.",
-      "prompt": "Scrape event listings from Eventbrite, filter by location, and add top 5 to my calendar."
+    "ragKnowledgeCleanup": {
+      "title": "RAG Knowledge Cleanup",
+      "description": "Detect stale docs and propose refresh priorities.",
+      "prompt": "Audit our knowledge base for stale or duplicate docs and produce a ranked cleanup plan with owners and deadlines."
+    },
+    "agentRunbookDraft": {
+      "title": "Agent Runbook Draft",
+      "description": "Create an operational runbook for a production agent.",
+      "prompt": "Draft an on-call runbook for this AI agent: health checks, rollback steps, common incidents, and recovery commands."
+    },
+    "internWeekPlan": {
+      "title": "Intern Week Plan",
+      "description": "Build a practical week-by-week intern onboarding plan.",
+      "prompt": "Create a 6-week intern onboarding plan with project milestones, mentorship checkpoints, and measurable outcomes."
+    },
+    "internPortfolioReview": {
+      "title": "Intern Portfolio Review",
+      "description": "Evaluate intern projects and provide feedback.",
+      "prompt": "Review these intern project summaries and write feedback on code quality, impact, and next-step recommendations."
+    },
+    "internProjectScoping": {
+      "title": "Intern Project Scoping",
+      "description": "Define intern-safe projects with clear acceptance criteria.",
+      "prompt": "Propose 5 intern-friendly engineering projects with scope, constraints, acceptance criteria, and risk level."
+    },
+    "internBugBash": {
+      "title": "Intern Bug Bash",
+      "description": "Generate a guided bug bash sheet for interns.",
+      "prompt": "Create a bug bash checklist for interns with feature areas, test scenarios, severity labels, and report template."
+    },
+    "internDemoPrep": {
+      "title": "Intern Demo Prep",
+      "description": "Prepare a polished intern demo narrative and slides.",
+      "prompt": "Turn this intern project into a demo script and slide outline: problem, implementation, results, lessons learned, and next steps."
     }
   }
 }

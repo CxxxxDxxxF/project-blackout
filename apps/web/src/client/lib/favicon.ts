@@ -19,12 +19,7 @@ function normalizeHost(domain: string): string {
 }
 
 function isLocalOrPrivateHost(host: string): boolean {
-  if (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '0.0.0.0' ||
-    host === '::1'
-  ) {
+  if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') {
     return true;
   }
 
