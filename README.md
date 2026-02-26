@@ -240,6 +240,29 @@ pnpm dev
 
 That's it.
 
+### Settings Personalization
+
+- Open `Settings -> About` to configure:
+  - `Your Name` (saved in app settings)
+  - `System Instructions` (saved in app settings)
+  - `SOUL.md` viewer (reads the repository `SOUL.md` file in local/dev runs)
+
+### Test Environment Notes
+
+- If `@accomplish_ai/agent-core` tests fail with a `better-sqlite3` ABI mismatch, rebuild native bindings for your current Node runtime:
+
+```bash
+pnpm -F @accomplish_ai/agent-core rebuild better-sqlite3
+```
+
+- In restricted sandbox environments, two proxy suites may fail with `listen EPERM` on `127.0.0.1:9228` / `127.0.0.1:9229`:
+  - `tests/unit/opencode/proxies/azure-foundry-proxy.test.ts`
+  - `tests/unit/opencode/proxies/moonshot-proxy.test.ts`
+
+These are environment-limited (port-binding) failures, not product regressions.
+
+- If Node fails to launch after a Homebrew upgrade due to a missing `libsimdjson` dylib, reinstalling Node is preferred. As a temporary local workaround, re-link the missing versioned library under `/opt/homebrew/opt/simdjson/lib/`.
+
 <details>
 <summary><strong>Prerequisites</strong></summary>
 

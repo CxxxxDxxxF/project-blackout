@@ -6,7 +6,43 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ProviderType, Skill, TodoItem, McpConnector } from '@accomplish_ai/agent-core';
+import type {
+  ProviderType,
+  Skill,
+  TodoItem,
+  McpConnector,
+  TaskConfig,
+} from '@accomplish_ai/agent-core';
+
+interface LlmfitModel {
+  name: string;
+  provider: string;
+  fitLevel: 'Perfect' | 'Good' | 'Marginal' | 'Too Tight';
+  runMode: 'GPU' | 'MoE' | 'CPU+GPU' | 'CPU';
+  scores: {
+    quality: number;
+    speed: number;
+    fit: number;
+    context: number;
+    composite: number;
+  };
+  quantization: string;
+  estimatedSpeedTps: number;
+  requiredVramGb: number;
+  ollamaName?: string;
+}
+
+interface LlmfitScanResult {
+  success: boolean;
+  models?: LlmfitModel[];
+  hardware?: {
+    totalRamGb: number;
+    availableRamGb: number;
+    gpuVramGb: number;
+    backend: string;
+  };
+  error?: string;
+}
 
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
@@ -14,12 +50,17 @@ const accomplishAPI = {
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   getPlatform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
 
-  // Shell
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:open-external', url),
 
+  // LLMFit Hardware Scanner
+  llmfitCheck: (): Promise<{ installed: boolean; version?: string }> =>
+    ipcRenderer.invoke('llmfit:check'),
+
+  llmfitScan: (useAirllmMemoryOverride?: boolean): Promise<LlmfitScanResult> =>
+    ipcRenderer.invoke('llmfit:scan', useAirllmMemoryOverride),
+
   // Task operations
-  startTask: (config: { description: string }): Promise<unknown> =>
-    ipcRenderer.invoke('task:start', config),
+  startTask: (config: TaskConfig): Promise<unknown> => ipcRenderer.invoke('task:start', config),
   cancelTask: (taskId: string): Promise<void> => ipcRenderer.invoke('task:cancel', taskId),
   interruptTask: (taskId: string): Promise<void> => ipcRenderer.invoke('task:interrupt', taskId),
   getTask: (taskId: string): Promise<unknown> => ipcRenderer.invoke('task:get', taskId),
@@ -54,6 +95,16 @@ const accomplishAPI = {
   },
   getAppSettings: (): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }> =>
     ipcRenderer.invoke('settings:app-settings'),
+  getUserName: (): Promise<string> => ipcRenderer.invoke('settings:user-name:get'),
+  setUserName: (userName: string): Promise<void> =>
+    ipcRenderer.invoke('settings:user-name:set', userName),
+  getSystemInstructions: (): Promise<string> =>
+    ipcRenderer.invoke('settings:system-instructions:get'),
+  setSystemInstructions: (systemInstructions: string): Promise<void> =>
+    ipcRenderer.invoke('settings:system-instructions:set', systemInstructions),
+  getSoulMarkdown: (): Promise<string> => ipcRenderer.invoke('settings:soul-markdown:get'),
+  setSoulMarkdown: (markdown: string): Promise<void> =>
+    ipcRenderer.invoke('settings:soul-markdown:set', markdown),
   getOpenAiBaseUrl: (): Promise<string> => ipcRenderer.invoke('settings:openai-base-url:get'),
   setOpenAiBaseUrl: (baseUrl: string): Promise<void> =>
     ipcRenderer.invoke('settings:openai-base-url:set', baseUrl),
@@ -148,7 +199,81 @@ const accomplishAPI = {
     } | null,
   ): Promise<void> => ipcRenderer.invoke('ollama:set-config', config),
 
-  // Azure Foundry configuration
+  // Ollama model management
+  ollamaListModels: (
+    baseUrl?: string,
+  ): Promise<{
+    success: boolean;
+    models?: Array<{
+      name: string;
+      model: string;
+      size: number;
+      digest: string;
+      modifiedAt: string;
+    }>;
+    error?: string;
+  }> => ipcRenderer.invoke('ollama:list-models', baseUrl),
+
+  ollamaPullModel: (
+    modelName: string,
+    baseUrl?: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke('ollama:pull-model', modelName, baseUrl),
+
+  ollamaDeleteModel: (
+    modelName: string,
+    baseUrl?: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke('ollama:delete-model', modelName, baseUrl),
+
+  onOllamaPullProgress: (
+    callback: (data: {
+      model: string;
+      status?: string;
+      completed?: number;
+      total?: number;
+    }) => void,
+  ) => {
+    const listener = (
+      _: unknown,
+      data: { model: string; status?: string; completed?: number; total?: number },
+    ) => callback(data);
+    ipcRenderer.on('ollama:pull-progress', listener);
+    return () => ipcRenderer.removeListener('ollama:pull-progress', listener);
+  },
+
+  // AirLLM server management
+  airllmStatus: (): Promise<{
+    running: boolean;
+    pid?: number;
+    modelLoaded?: boolean;
+    modelId?: string | null;
+  }> => ipcRenderer.invoke('airllm:status'),
+
+  airllmStart: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('airllm:start'),
+
+  airllmStop: (): Promise<void> => ipcRenderer.invoke('airllm:stop'),
+
+  airllmLoadModel: (modelId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('airllm:load-model', modelId),
+
+  airllmServerUrl: (): Promise<{ url: string }> => ipcRenderer.invoke('airllm:server-url'),
+  airllmDownloadStatus: (): Promise<{
+    active: boolean;
+    phase?: string;
+    model?: string | null;
+    status?: string;
+    downloadedBytes?: number;
+    totalBytes?: number | null;
+    percent?: number | null;
+    etaSeconds?: number | null;
+  }> => ipcRenderer.invoke('airllm:download-status'),
+
   getAzureFoundryConfig: (): Promise<{
     baseUrl: string;
     deploymentName: string;

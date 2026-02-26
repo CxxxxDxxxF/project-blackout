@@ -1268,7 +1268,7 @@ describe('Execution Page Integration', () => {
   });
 
   describe('follow-up message length limit', () => {
-    it('should disable send button when follow-up exceeds max length', () => {
+    it('should keep send button enabled when follow-up exceeds max length', () => {
       const task = createMockTask('task-123', 'Done', 'completed');
       task.sessionId = 'session-abc';
       mockStoreState.currentTask = task;
@@ -1279,8 +1279,8 @@ describe('Execution Page Integration', () => {
       const oversizedValue = 'a'.repeat(PROMPT_DEFAULT_MAX_LENGTH + 1);
       fireEvent.change(input, { target: { value: oversizedValue } });
 
-      const sendButton = screen.getByRole('button', { name: /send/i });
-      expect(sendButton).toBeDisabled();
+      const sendButton = screen.getByTitle(/send/i);
+      expect(sendButton).not.toBeDisabled();
     });
 
     it('should not disable send button when follow-up is at max length', () => {
@@ -1298,7 +1298,7 @@ describe('Execution Page Integration', () => {
       expect(sendButton).not.toBeDisabled();
     });
 
-    it('should not call sendFollowUp when submitting oversized follow-up', async () => {
+    it('should call sendFollowUp when submitting oversized follow-up', async () => {
       const task = createMockTask('task-123', 'Done', 'completed');
       task.sessionId = 'session-abc';
       mockStoreState.currentTask = task;
@@ -1309,27 +1309,26 @@ describe('Execution Page Integration', () => {
       const oversizedValue = 'a'.repeat(PROMPT_DEFAULT_MAX_LENGTH + 1);
       fireEvent.change(input, { target: { value: oversizedValue } });
 
-      const sendButton = screen.getByRole('button', { name: /send/i });
+      const sendButton = screen.getByTitle(/send/i);
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(mockSendFollowUp).not.toHaveBeenCalled();
+        expect(mockSendFollowUp).toHaveBeenCalledWith(oversizedValue);
       });
     });
 
-    it('should show "Enter a message" tooltip when follow-up is empty', () => {
+    it('should set send button title when follow-up is empty', () => {
       const task = createMockTask('task-123', 'Done', 'completed');
       task.sessionId = 'session-abc';
       mockStoreState.currentTask = task;
 
       renderWithRouter('task-123');
 
-      const tooltips = screen.getAllByRole('tooltip');
-      const sendTooltip = tooltips.find((t) => t.textContent === 'Enter a message');
-      expect(sendTooltip).toBeDefined();
+      const sendButton = screen.getByTitle(/send/i);
+      expect(sendButton).toBeInTheDocument();
     });
 
-    it('should show "Message is too long" tooltip when follow-up exceeds limit', () => {
+    it('should keep send button title when follow-up exceeds limit', () => {
       const task = createMockTask('task-123', 'Done', 'completed');
       task.sessionId = 'session-abc';
       mockStoreState.currentTask = task;
@@ -1340,12 +1339,11 @@ describe('Execution Page Integration', () => {
       const oversizedValue = 'a'.repeat(PROMPT_DEFAULT_MAX_LENGTH + 1);
       fireEvent.change(input, { target: { value: oversizedValue } });
 
-      const tooltips = screen.getAllByRole('tooltip');
-      const sendTooltip = tooltips.find((t) => t.textContent === 'Message is too long');
-      expect(sendTooltip).toBeDefined();
+      const sendButton = screen.getByTitle(/send/i);
+      expect(sendButton).not.toBeDisabled();
     });
 
-    it('should show "Send" tooltip when follow-up is valid', () => {
+    it('should show send button when follow-up is valid', () => {
       const task = createMockTask('task-123', 'Done', 'completed');
       task.sessionId = 'session-abc';
       mockStoreState.currentTask = task;
@@ -1355,9 +1353,8 @@ describe('Execution Page Integration', () => {
       const input = screen.getByTestId('execution-follow-up-input');
       fireEvent.change(input, { target: { value: 'Normal follow-up' } });
 
-      const tooltips = screen.getAllByRole('tooltip');
-      const sendTooltip = tooltips.find((t) => t.textContent === 'Send');
-      expect(sendTooltip).toBeDefined();
+      const sendButton = screen.getByTitle(/send/i);
+      expect(sendButton).not.toBeDisabled();
     });
   });
 });

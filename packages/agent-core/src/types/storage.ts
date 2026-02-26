@@ -54,6 +54,8 @@ export interface AppSettings {
   lmstudioConfig: LMStudioConfig | null;
   openaiBaseUrl: string;
   theme: ThemePreference;
+  userName: string;
+  systemInstructions: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,14 @@ export interface AppSettingsAPI {
   getTheme(): ThemePreference;
   /** Set the theme preference */
   setTheme(theme: ThemePreference): void;
+  /** Get the user name shown in settings */
+  getUserName(): string;
+  /** Set the user name shown in settings */
+  setUserName(userName: string): void;
+  /** Get custom system instructions */
+  getSystemInstructions(): string;
+  /** Set custom system instructions */
+  setSystemInstructions(systemInstructions: string): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */

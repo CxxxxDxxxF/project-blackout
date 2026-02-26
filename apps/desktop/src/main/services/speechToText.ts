@@ -2,20 +2,19 @@
  * Speech-to-Text service wrapper for Electron desktop app.
  *
  * This module provides a thin wrapper around the core SpeechService,
- * initializing it with the desktop app's storage.
+ * initializing it with the shared app storage singleton.
  *
  * Audio recording happens in the renderer process (uses browser APIs),
  * then audio data is sent to main process via IPC for transcription.
  */
 
-import { app } from 'electron';
 import {
   createSpeechService,
-  createStorage,
   type SpeechServiceAPI,
   type TranscriptionResult,
   type TranscriptionError,
 } from '@accomplish_ai/agent-core';
+import { getStorage } from '../store/storage';
 
 // Re-export types from core
 export type { TranscriptionResult, TranscriptionError };
@@ -24,10 +23,7 @@ let _speechService: SpeechServiceAPI | null = null;
 
 function getSpeechService(): SpeechServiceAPI {
   if (!_speechService) {
-    const storage = createStorage({
-      userDataPath: app.getPath('userData'),
-    });
-    _speechService = createSpeechService({ storage });
+    _speechService = createSpeechService({ storage: getStorage() });
   }
   return _speechService;
 }

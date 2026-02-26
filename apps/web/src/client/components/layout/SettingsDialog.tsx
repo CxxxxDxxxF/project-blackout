@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
 import { getAccomplish } from '@/lib/accomplish';
@@ -70,7 +70,7 @@ export function SettingsDialog({
 
   // Debug mode state - stored in appSettings, not providerSettings
   const [debugMode, setDebugModeState] = useState(false);
-  const accomplish = getAccomplish();
+  const accomplish = useMemo(() => getAccomplish(), []);
 
   // Refetch settings and debug mode when dialog opens
   useEffect(() => {
@@ -263,7 +263,6 @@ export function SettingsDialog({
         <DialogContent
           className="max-w-4xl w-full h-[80vh] flex flex-col overflow-hidden p-0"
           data-testid="settings-dialog"
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader className="sr-only">
             <DialogTitle>{t('title')}</DialogTitle>
@@ -281,7 +280,6 @@ export function SettingsDialog({
       <DialogContent
         className="max-w-4xl w-full h-[65vh] flex overflow-hidden p-0"
         data-testid="settings-dialog"
-        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{t('title')}</DialogTitle>
@@ -446,7 +444,9 @@ export function SettingsDialog({
               )}
 
               {/* About Tab */}
-              {activeTab === 'about' && <AboutTab appVersion={appVersion} />}
+              {activeTab === 'about' && (
+                <AboutTab appVersion={appVersion} accomplish={accomplish} />
+              )}
 
               {/* Footer: Add (skills only) + Done */}
               <div className="mt-4 flex items-center justify-between">

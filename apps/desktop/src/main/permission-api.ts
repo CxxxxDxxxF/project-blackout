@@ -29,6 +29,20 @@ const permissionHandler: PermissionHandlerAPI = createPermissionHandler();
 let mainWindow: BrowserWindow | null = null;
 let getActiveTaskId: (() => string | null) | null = null;
 
+function safeSendToRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  try {
+    mainWindow.webContents.send(channel, payload);
+  } catch (error) {
+    console.warn('[Permission API] Failed to send event to renderer', {
+      channel,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 /**
  * Initialize the permission API with dependencies
  */
@@ -122,7 +136,7 @@ export function startPermissionApiServer(): http.Server {
     const permissionRequest = permissionHandler.buildFilePermissionRequest(requestId, taskId, data);
 
     // Send to renderer (Electron-specific)
-    mainWindow.webContents.send('permission:request', permissionRequest);
+    safeSendToRenderer('permission:request', permissionRequest);
 
     // Wait for user response
     try {
@@ -221,7 +235,7 @@ export function startQuestionApiServer(): http.Server {
     const questionRequest = permissionHandler.buildQuestionRequest(requestId, taskId, data);
 
     // Send to renderer (Electron-specific)
-    mainWindow.webContents.send('permission:request', questionRequest);
+    safeSendToRenderer('permission:request', questionRequest);
 
     // Wait for user response
     try {

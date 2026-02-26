@@ -37,6 +37,10 @@ import {
   setOpenAiBaseUrl,
   getTheme,
   setTheme,
+  getUserName,
+  setUserName,
+  getSystemInstructions,
+  setSystemInstructions,
   getAppSettings,
   clearAppSettings,
 } from '../storage/repositories/appSettings.js';
@@ -122,6 +126,10 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
     setOpenAiBaseUrl: (baseUrl) => setOpenAiBaseUrl(baseUrl),
     getTheme: () => getTheme(),
     setTheme: (theme) => setTheme(theme),
+    getUserName: () => getUserName(),
+    setUserName: (userName) => setUserName(userName),
+    getSystemInstructions: () => getSystemInstructions(),
+    setSystemInstructions: (systemInstructions) => setSystemInstructions(systemInstructions),
     getAppSettings: () => getAppSettings(),
     clearAppSettings: () => clearAppSettings(),
 

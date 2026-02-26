@@ -15,6 +15,7 @@ import {
   FormError,
   ModelSelector,
 } from '../shared';
+import { LocalModelManager } from './LocalModelManager';
 
 import ollamaLogo from '/assets/ai-logos/ollama.svg';
 
@@ -30,6 +31,29 @@ interface OllamaProviderFormProps {
   onDisconnect: () => void;
   onModelChange: (modelId: string) => void;
   showModelError: boolean;
+}
+
+function mapOllamaConnectionError(rawError: string, serverUrl: string): string {
+  const message = rawError.toLowerCase();
+
+  if (
+    message.includes('econnrefused') ||
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('fetch failed')
+  ) {
+    return `Cannot reach Ollama at ${serverUrl}. Start Ollama first ("ollama serve"), then retry.`;
+  }
+
+  if (message.includes('404')) {
+    return `Connected to ${serverUrl}, but this does not look like an Ollama server. Check the URL.`;
+  }
+
+  if (message.includes('timeout') || message.includes('abort')) {
+    return `Connection to ${serverUrl} timed out. Make sure Ollama is running and retry.`;
+  }
+
+  return rawError;
 }
 
 function ToolSupportBadge({
@@ -181,6 +205,7 @@ export function OllamaProviderForm({
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
+  const [setupExpanded, setSetupExpanded] = useState(true);
 
   const isConnected = connectedProvider?.connectionStatus === 'connected';
 
@@ -193,7 +218,9 @@ export function OllamaProviderForm({
       const result = await accomplish.testOllamaConnection(serverUrl);
 
       if (!result.success) {
-        setError(result.error || t('status.connectionFailed'));
+        setError(
+          mapOllamaConnectionError(result.error || t('status.connectionFailed'), serverUrl),
+        );
         setConnecting(false);
         return;
       }
@@ -271,6 +298,33 @@ export function OllamaProviderForm({
               </div>
 
               <FormError error={error} />
+
+              <div className="rounded-md border border-border bg-muted/20 p-3">
+                <button
+                  onClick={() => setSetupExpanded((prev) => !prev)}
+                  className="flex w-full items-center justify-between text-left text-sm font-medium text-foreground"
+                >
+                  <span>First-time Ollama setup</span>
+                  <span className="text-xs text-muted-foreground">
+                    {setupExpanded ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+
+                {setupExpanded && (
+                  <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                    <p>1. Install Ollama from https://ollama.com/download</p>
+                    <p>
+                      2. Start server: <code className="rounded bg-muted px-1">ollama serve</code>
+                    </p>
+                    <p>
+                      3. Download first model:{' '}
+                      <code className="rounded bg-muted px-1">ollama pull llama3.2:3b</code>
+                    </p>
+                    <p>4. Keep URL as http://localhost:11434 and click Connect.</p>
+                  </div>
+                )}
+              </div>
+
               <ConnectButton onClick={handleConnect} connecting={connecting} />
             </motion.div>
           ) : (
@@ -307,6 +361,13 @@ export function OllamaProviderForm({
                 error={showModelError && !connectedProvider?.selectedModelId}
               />
 
+              {models.length === 0 && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+                  Connected to Ollama, but no local models were found yet. Use Local Model Manager
+                  below to pull your first model, then select it here.
+                </div>
+              )}
+
               <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <ToolSupportBadge status="supported" t={t} />
@@ -316,6 +377,17 @@ export function OllamaProviderForm({
             </motion.div>
           )}
         </AnimatePresence>
+
+        <div className="pt-4 mt-4 border-t border-border/50">
+          <LocalModelManager
+            serverUrl={
+              isConnected
+                ? (connectedProvider?.credentials as OllamaCredentials)?.serverUrl ||
+                  'http://localhost:11434'
+                : serverUrl
+            }
+          />
+        </div>
       </div>
     </div>
   );

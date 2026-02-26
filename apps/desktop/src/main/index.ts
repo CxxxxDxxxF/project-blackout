@@ -36,6 +36,7 @@ import {
 import { getApiKey, clearSecureStorage } from './store/secureStorage';
 import { initializeLogCollector, shutdownLogCollector, getLogCollector } from './logging';
 import { skillsManager } from './skills';
+import { getAirLLMServer } from './services/airllmServer';
 
 if (process.argv.includes('--e2e-skip-auth')) {
   (global as Record<string, unknown>).E2E_SKIP_AUTH = true;
@@ -312,6 +313,18 @@ if (!gotTheLock) {
     registerIPCHandlers();
     console.log('[Main] IPC handlers registered');
 
+    // Start AirLLM server in the background
+    getAirLLMServer()
+      .start()
+      .then((res) => {
+        if (!res.success) {
+          console.error('[Main] AirLLM server failed to start:', res.error);
+        } else {
+          console.log('[Main] AirLLM server started successfully');
+        }
+      })
+      .catch((err) => console.error('[Main] AirLLM server start error:', err));
+
     createWindow();
 
     if (mainWindow) {
@@ -335,6 +348,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  void getAirLLMServer().stop();
   disposeTaskManager(); // Also cleans up proxies internally
   cleanupVertexServiceAccountKey();
   oauthBrowserFlow.dispose();

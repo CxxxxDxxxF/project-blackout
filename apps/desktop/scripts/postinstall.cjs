@@ -92,7 +92,7 @@ if (isWindows) {
   }
 } else {
   // On macOS/Linux, run electron-rebuild first (matches original behavior)
-  runCommand('npx electron-rebuild', 'Running electron-rebuild');
+  runCommand('./node_modules/.bin/electron-rebuild', 'Running electron-rebuild');
 }
 
 const useBundledMcp = process.env.ACCOMPLISH_BUNDLED_MCP === '1' || process.env.CI === 'true';

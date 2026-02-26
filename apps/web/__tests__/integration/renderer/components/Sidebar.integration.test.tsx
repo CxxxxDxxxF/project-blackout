@@ -38,6 +38,7 @@ const mockAccomplish = {
   listTasks: mockListTasks.mockResolvedValue([]),
   onTaskStatusChange: mockOnTaskStatusChange.mockReturnValue(() => {}),
   onTaskUpdate: mockOnTaskUpdate.mockReturnValue(() => {}),
+  fetchProviderModels: vi.fn().mockResolvedValue({ success: true, models: [] }),
   getSelectedModel: vi.fn().mockResolvedValue({ provider: 'anthropic', id: 'claude-3-opus' }),
   getOllamaConfig: vi.fn().mockResolvedValue(null),
   isE2EMode: vi.fn().mockResolvedValue(false),
@@ -95,6 +96,12 @@ vi.mock('@/components/layout/SettingsDialog', () => ({
         <button onClick={() => onOpenChange(false)}>Close Settings</button>
       </div>
     ) : null,
+  default: ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) =>
+    open ? (
+      <div data-testid="settings-dialog">
+        <button onClick={() => onOpenChange(false)}>Close Settings</button>
+      </div>
+    ) : null,
 }));
 
 // Mock framer-motion to simplify testing animations
@@ -130,7 +137,7 @@ vi.mock('framer-motion', () => {
 });
 
 // Need to import after mocks are set up
-import { Sidebar } from '@/components/layout/Sidebar';
+import Sidebar from '@/components/layout/Sidebar';
 
 describe('Sidebar Integration', () => {
   beforeEach(() => {
@@ -371,7 +378,7 @@ describe('Sidebar Integration', () => {
 
       // Assert
       const taskItem = screen.getByText('Active task').closest('[role="button"]');
-      expect(taskItem?.className).toContain('bg-[#EDEBE7]');
+      expect(taskItem?.className).toContain('bg-accent');
     });
 
     it('should not highlight inactive conversations', () => {

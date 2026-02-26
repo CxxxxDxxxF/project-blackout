@@ -26,6 +26,7 @@ const USE_CASE_KEYS = [
 
 export function HomePage() {
   const [prompt, setPrompt] = useState('');
+  const [userName, setUserName] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     'providers' | 'voice' | 'skills' | 'connectors'
@@ -59,6 +60,25 @@ export function HomePage() {
       unsubscribePermission();
     };
   }, [addTaskUpdate, setPermissionRequest, accomplish]);
+
+  useEffect(() => {
+    let mounted = true;
+    accomplish
+      .getUserName()
+      .then((savedName) => {
+        if (mounted) {
+          setUserName(savedName);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setUserName('');
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [accomplish, showSettingsDialog]);
 
   const executeTask = useCallback(async () => {
     if (!prompt.trim() || isLoading) return;
@@ -152,7 +172,7 @@ export function HomePage() {
               transition={springs.gentle}
               className="font-apparat text-[32px] tracking-[-0.015em] text-foreground w-full text-center pt-[250px]"
             >
-              {t('title')}
+              {userName.trim() ? `Welcome back, ${userName.trim()}` : t('title')}
             </motion.h1>
 
             <motion.div

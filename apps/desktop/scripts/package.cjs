@@ -38,9 +38,17 @@ try {
     if (fs.existsSync(pkgPath)) {
       const stats = fs.lstatSync(pkgPath);
       if (stats.isSymbolicLink()) {
-        symlinkTargets[pkg] = fs.readlinkSync(pkgPath);
-        console.log('Temporarily removing workspace symlink:', pkgPath);
+        const linkTarget = fs.readlinkSync(pkgPath);
+        symlinkTargets[pkg] = linkTarget;
+
+        // Resolve absolute path of link target
+        const realPath = path.isAbsolute(linkTarget)
+          ? linkTarget
+          : path.resolve(path.dirname(pkgPath), linkTarget);
+
+        console.log('Replacing workspace symlink with copy:', pkgPath);
         fs.unlinkSync(pkgPath);
+        fs.cpSync(realPath, pkgPath, { recursive: true });
       }
     }
   }
@@ -121,6 +129,10 @@ try {
       const absoluteTarget = path.isAbsolute(target)
         ? target
         : path.resolve(path.dirname(pkgPath), target);
+
+      if (fs.existsSync(pkgPath)) {
+        fs.rmSync(pkgPath, { recursive: true, force: true });
+      }
 
       if (isWindows) {
         fs.symlinkSync(absoluteTarget, pkgPath, 'junction');

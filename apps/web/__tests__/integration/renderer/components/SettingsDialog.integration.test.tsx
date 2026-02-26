@@ -9,6 +9,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 const mockAccomplish = {
   getOllamaConfig: vi.fn().mockResolvedValue(null),
+  llmfitCheck: vi.fn().mockResolvedValue({ installed: false }),
+  llmfitScan: vi.fn().mockResolvedValue({ success: true, models: [] }),
+  airllmStatus: vi.fn().mockResolvedValue({ running: false }),
+  airllmServerUrl: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:11435' }),
+  fetchProviderModels: vi.fn().mockResolvedValue({ success: true, models: [] }),
   isE2EMode: vi.fn().mockResolvedValue(false),
   getProviderSettings: vi.fn().mockResolvedValue({
     activeProviderId: 'anthropic',
@@ -27,10 +32,22 @@ const mockAccomplish = {
   setConnectedProvider: vi.fn().mockResolvedValue(undefined),
   removeConnectedProvider: vi.fn().mockResolvedValue(undefined),
   setProviderDebugMode: vi.fn().mockResolvedValue(undefined),
+  getOpenAiBaseUrl: vi.fn().mockResolvedValue(''),
+  setOpenAiBaseUrl: vi.fn().mockResolvedValue(undefined),
+  getOpenAiOauthStatus: vi.fn().mockResolvedValue({ connected: false }),
+  loginOpenAiWithChatGpt: vi.fn().mockResolvedValue({ ok: true }),
+  validateApiKeyForProvider: vi.fn().mockResolvedValue({ valid: true }),
+  addApiKey: vi.fn().mockResolvedValue(undefined),
   validateBedrockCredentials: vi.fn().mockResolvedValue({ valid: true }),
   saveBedrockCredentials: vi.fn().mockResolvedValue(undefined),
   getDebugMode: vi.fn().mockResolvedValue(false),
   getVersion: vi.fn().mockResolvedValue('0.1.0-test'),
+  getUserName: vi.fn().mockResolvedValue(''),
+  setUserName: vi.fn().mockResolvedValue(undefined),
+  getSystemInstructions: vi.fn().mockResolvedValue(''),
+  setSystemInstructions: vi.fn().mockResolvedValue(undefined),
+  getSoulMarkdown: vi.fn().mockResolvedValue(''),
+  setSoulMarkdown: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock the accomplish module
@@ -213,7 +230,7 @@ describe('SettingsDialog Integration', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
         // Verify anthropic card has green background (is active)
         const anthropicCard = screen.getByTestId('provider-card-anthropic');
-        expect(anthropicCard.className).toContain('bg-[#e9f7e7]');
+        expect(anthropicCard.className).toContain('bg-provider-bg-active');
       });
 
       // Verify the initial state: anthropic is active

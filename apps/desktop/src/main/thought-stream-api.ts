@@ -23,6 +23,20 @@ export type { ThoughtEvent, CheckpointEvent };
 // Store reference to main window
 let mainWindow: BrowserWindow | null = null;
 
+function safeSendToRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  try {
+    mainWindow.webContents.send(channel, payload);
+  } catch (error) {
+    console.warn('[Thought Stream API] Failed to send event to renderer', {
+      channel,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // Singleton handler instance for task tracking and event validation
 const thoughtStreamHandler: ThoughtStreamAPI = createThoughtStreamHandler();
 
@@ -125,9 +139,7 @@ export function startThoughtStreamServer(): http.Server {
 
 function handleThought(event: ThoughtEvent, res: http.ServerResponse): void {
   // Forward to renderer via IPC
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('task:thought', event);
-  }
+  safeSendToRenderer('task:thought', event);
 
   // Fire-and-forget: always return 200
   res.writeHead(200);
@@ -136,9 +148,7 @@ function handleThought(event: ThoughtEvent, res: http.ServerResponse): void {
 
 function handleCheckpoint(event: CheckpointEvent, res: http.ServerResponse): void {
   // Forward to renderer via IPC
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('task:checkpoint', event);
-  }
+  safeSendToRenderer('task:checkpoint', event);
 
   // Fire-and-forget: always return 200
   res.writeHead(200);

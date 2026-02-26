@@ -9,6 +9,7 @@ import gmailIcon from '/assets/icons/integrations/gmail.png';
 import linkedinIcon from '/assets/icons/integrations/linkedin.png';
 import eventbriteIcon from '/assets/icons/integrations/eventbrite.png';
 import yahooFinanceIcon from '/assets/icons/integrations/yahoo-finance.png';
+import { getDomainFaviconSrc } from '@/lib/favicon';
 
 const ICON_MAP: Record<string, string> = {
   'slack.com': slackIcon,
@@ -25,6 +26,6 @@ const ICON_MAP: Record<string, string> = {
 };
 
 export function IntegrationIcon({ domain, className }: { domain: string; className?: string }) {
-  const src = ICON_MAP[domain] ?? `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  const src = ICON_MAP[domain] ?? getDomainFaviconSrc(domain, 128);
   return <img alt={domain} src={src} className={className} loading="lazy" />;
 }

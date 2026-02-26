@@ -19,6 +19,9 @@
     "predev:clean:check": "node scripts/predev.cjs",
     "dev:clean:check": "node scripts/dev.cjs --clean --check",
     "dev:kill": "node scripts/dev-kill.cjs",
+    "ollama:ensure": "node scripts/ensure-ollama.cjs",
+    "ollama:check": "node scripts/ensure-ollama.cjs --check",
+    "dev:ollama": "pnpm ollama:ensure && pnpm dev",
     "dev:remote": "node scripts/dev-remote.cjs",
     "postinstall": "node scripts/save-lockfile-hash.cjs",
     "build": "pnpm -r --workspace-concurrency=1 build",
@@ -33,8 +36,7 @@
     "lint:eslint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "clean": "pnpm -r clean && rm -rf node_modules",
-    "prepare": "husky"
+    "clean": "pnpm -r clean && rm -rf node_modules"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -64,6 +66,7 @@
     "globals": "^17.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "micromark-util-chunked": "2.0.1",
     "prettier": "^3.8.1",
     "typescript-eslint": "^8.55.0",
     "wait-on": "^9.0.4"

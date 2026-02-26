@@ -35,6 +35,36 @@ interface AccomplishAPI {
   // Shell
   openExternal(url: string): Promise<void>;
 
+  // LLMFit
+  llmfitCheck(): Promise<{ installed: boolean; version?: string }>;
+  llmfitScan(useAirllmMemoryOverride?: boolean): Promise<{
+    success: boolean;
+    models?: Array<{
+      name: string;
+      provider: string;
+      fitLevel: 'Perfect' | 'Good' | 'Marginal' | 'Too Tight';
+      runMode: 'GPU' | 'MoE' | 'CPU+GPU' | 'CPU';
+      scores: {
+        quality: number;
+        speed: number;
+        fit: number;
+        context: number;
+        composite: number;
+      };
+      quantization: string;
+      estimatedSpeedTps: number;
+      requiredVramGb: number;
+      ollamaName?: string;
+    }>;
+    hardware?: {
+      totalRamGb: number;
+      availableRamGb: number;
+      gpuVramGb: number;
+      backend: string;
+    };
+    error?: string;
+  }>;
+
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;
   cancelTask(taskId: string): Promise<void>;
@@ -78,6 +108,12 @@ interface AccomplishAPI {
   setTheme(theme: string): Promise<void>;
   onThemeChange?(callback: (data: { theme: string; resolved: string }) => void): () => void;
   getAppSettings(): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }>;
+  getUserName(): Promise<string>;
+  setUserName(userName: string): Promise<void>;
+  getSystemInstructions(): Promise<string>;
+  setSystemInstructions(systemInstructions: string): Promise<void>;
+  getSoulMarkdown(): Promise<string>;
+  setSoulMarkdown(markdown: string): Promise<void>;
   getOpenAiBaseUrl(): Promise<string>;
   setOpenAiBaseUrl(baseUrl: string): Promise<void>;
   getOpenAiOauthStatus(): Promise<{ connected: boolean; expires?: number }>;
@@ -161,7 +197,57 @@ interface AccomplishAPI {
     } | null,
   ): Promise<void>;
 
-  // Azure Foundry configuration
+  // Ollama model management
+  ollamaListModels(baseUrl?: string): Promise<{
+    success: boolean;
+    models?: Array<{
+      name: string;
+      model: string;
+      size: number;
+      digest: string;
+      modifiedAt: string;
+    }>;
+    error?: string;
+  }>;
+  ollamaPullModel(
+    modelName: string,
+    baseUrl?: string,
+  ): Promise<{ success: boolean; error?: string }>;
+  ollamaDeleteModel(
+    modelName: string,
+    baseUrl?: string,
+  ): Promise<{ success: boolean; error?: string }>;
+  onOllamaPullProgress?(
+    callback: (data: {
+      model: string;
+      status?: string;
+      completed?: number;
+      total?: number;
+    }) => void,
+  ): () => void;
+
+  // AirLLM server management
+  airllmStatus(): Promise<{
+    running: boolean;
+    pid?: number;
+    modelLoaded?: boolean;
+    modelId?: string | null;
+  }>;
+  airllmStart(): Promise<{ success: boolean; error?: string }>;
+  airllmStop(): Promise<void>;
+  airllmLoadModel(modelId: string): Promise<{ success: boolean; error?: string }>;
+  airllmServerUrl(): Promise<{ url: string }>;
+  airllmDownloadStatus(): Promise<{
+    active: boolean;
+    phase?: string;
+    model?: string | null;
+    status?: string;
+    downloadedBytes?: number;
+    totalBytes?: number | null;
+    percent?: number | null;
+    etaSeconds?: number | null;
+  }>;
+
   getAzureFoundryConfig(): Promise<{
     baseUrl: string;
     deploymentName: string;

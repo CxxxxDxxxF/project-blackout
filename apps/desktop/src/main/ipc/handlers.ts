@@ -1,8 +1,10 @@
 import crypto from 'crypto';
+import { spawn } from 'node:child_process';
 import { ipcMain, BrowserWindow, shell, dialog, nativeTheme } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { URL } from 'url';
+import { URL, fileURLToPath } from 'url';
 import fs from 'fs';
+import path from 'path';
 import {
   isOpenCodeCliInstalled,
   getOpenCodeCliVersion,
@@ -41,6 +43,9 @@ import {
   validateLMStudioConfig,
 } from '@accomplish_ai/agent-core';
 import { getStorage } from '../store/storage';
+import { getAirLLMServer } from '../services/airllmServer';
+import { checkLlmfitInstalled, runLlmfit } from '../services/llmfit';
+
 import { getOpenAiOauthStatus } from '@accomplish_ai/agent-core';
 import { loginOpenAiWithChatGpt } from '../opencode/auth-browser';
 import type {
@@ -100,6 +105,93 @@ import { skillsManager } from '../skills';
 import { registerVertexHandlers } from '../providers';
 
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
+const CURRENT_FILE_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+function canAutoStartOllama(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
+  } catch {
+    return false;
+  }
+}
+
+async function isOllamaReachable(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, { signal: AbortSignal.timeout(2000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function hasOllamaCli(): Promise<boolean> {
+  return await new Promise((resolve) => {
+    const child = spawn('ollama', ['--version'], { stdio: 'ignore' });
+    child.on('error', () => resolve(false));
+    child.on('close', (code) => resolve(code === 0));
+  });
+}
+
+function startOllamaDetached(): void {
+  const child = spawn('ollama', ['serve'], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+}
+
+async function ensureOllamaRunning(url: string): Promise<{ ok: boolean; error?: string }> {
+  if (await isOllamaReachable(url)) {
+    return { ok: true };
+  }
+
+  if (!canAutoStartOllama(url)) {
+    return { ok: false, error: `Cannot reach Ollama at ${url}` };
+  }
+
+  if (!(await hasOllamaCli())) {
+    return { ok: false, error: 'Ollama CLI is not installed. Install from https://ollama.com/download' };
+  }
+
+  try {
+    startOllamaDetached();
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to start Ollama: ${err instanceof Error ? err.message : 'unknown error'}`,
+    };
+  }
+
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    if (await isOllamaReachable(url)) {
+      return { ok: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  return {
+    ok: false,
+    error: `Ollama did not become ready at ${url}. Run "ollama serve" manually and retry.`,
+  };
+}
+
+function resolveSoulMarkdownPath(): string {
+  const candidates = [
+    path.resolve(process.cwd(), 'SOUL.md'),
+    path.resolve(CURRENT_FILE_DIR, '../../../../SOUL.md'),
+    path.resolve(CURRENT_FILE_DIR, '../../../SOUL.md'),
+  ];
+
+  for (const candidatePath of candidates) {
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return candidates[0];
+}
 
 function assertTrustedWindow(window: BrowserWindow | null): BrowserWindow {
   if (!window || window.isDestroyed()) {
@@ -206,7 +298,14 @@ export function registerIPCHandlers(): void {
       .then((summary) => {
         storage.updateTaskSummary(taskId, summary);
         if (!window.isDestroyed() && !sender.isDestroyed()) {
-          sender.send('task:summary', { taskId, summary });
+          try {
+            sender.send('task:summary', { taskId, summary });
+          } catch (error) {
+            console.warn('[IPC] Failed to send task summary to renderer', {
+              taskId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
       })
       .catch((err) => {
@@ -577,6 +676,14 @@ export function registerIPCHandlers(): void {
     }
   });
 
+  handle('llmfit:check', async () => {
+    return checkLlmfitInstalled();
+  });
+
+  handle('llmfit:scan', async (_event: IpcMainInvokeEvent, useAirllmMemoryOverride?: boolean) => {
+    return runLlmfit(useAirllmMemoryOverride);
+  });
+
   handle('bedrock:save', async (_event: IpcMainInvokeEvent, credentials: string) => {
     const parsed = JSON.parse(credentials);
 
@@ -704,6 +811,241 @@ export function registerIPCHandlers(): void {
       }
     }
     storage.setOllamaConfig(config);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Ollama model management (pull / delete)
+  // ---------------------------------------------------------------------------
+
+  handle(
+    'ollama:list-models',
+    async (
+      _event: IpcMainInvokeEvent,
+      baseUrl?: string,
+    ): Promise<{
+      success: boolean;
+      models?: Array<{
+        name: string;
+        model: string;
+        size: number;
+        digest: string;
+        modifiedAt: string;
+      }>;
+      error?: string;
+    }> => {
+      const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
+      const ensured = await ensureOllamaRunning(url);
+      if (!ensured.ok) {
+        return { success: false, error: ensured.error };
+      }
+      try {
+        const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) {
+          return { success: false, error: `Ollama returned status ${res.status}` };
+        }
+        const data = (await res.json()) as {
+          models?: Array<{
+            name: string;
+            model: string;
+            size: number;
+            digest: string;
+            modified_at: string;
+          }>;
+        };
+        const models = (data.models || []).map((m) => ({
+          name: m.name,
+          model: m.model,
+          size: m.size,
+          digest: m.digest,
+          modifiedAt: m.modified_at,
+        }));
+        return { success: true, models };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to connect' };
+      }
+    },
+  );
+
+  handle(
+    'ollama:pull-model',
+    async (
+      event: IpcMainInvokeEvent,
+      modelName: string,
+      baseUrl?: string,
+    ): Promise<{
+      success: boolean;
+      error?: string;
+    }> => {
+      const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
+      const ensured = await ensureOllamaRunning(url);
+      if (!ensured.ok) {
+        return { success: false, error: ensured.error };
+      }
+      try {
+        const res = await fetch(`${url}/api/pull`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: modelName, stream: true }),
+          signal: AbortSignal.timeout(3600000), // 1 hour for large models
+        });
+        if (!res.ok) {
+          return { success: false, error: `Ollama returned status ${res.status}` };
+        }
+        const reader = res.body?.getReader();
+        if (!reader) {
+          return { success: false, error: 'No response body' };
+        }
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const msg = JSON.parse(line) as {
+                status?: string;
+                completed?: number;
+                total?: number;
+                error?: string;
+              };
+              if (msg.error) {
+                return { success: false, error: msg.error };
+              }
+              event.sender.send('ollama:pull-progress', {
+                model: modelName,
+                status: msg.status,
+                completed: msg.completed,
+                total: msg.total,
+              });
+            } catch {
+              // ignore malformed lines
+            }
+          }
+        }
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Pull failed' };
+      }
+    },
+  );
+
+  handle(
+    'ollama:delete-model',
+    async (
+      _event: IpcMainInvokeEvent,
+      modelName: string,
+      baseUrl?: string,
+    ): Promise<{
+      success: boolean;
+      error?: string;
+    }> => {
+      const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
+      const ensured = await ensureOllamaRunning(url);
+      if (!ensured.ok) {
+        return { success: false, error: ensured.error };
+      }
+      try {
+        const res = await fetch(`${url}/api/delete`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: modelName }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) {
+          return { success: false, error: `Ollama returned status ${res.status}` };
+        }
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Delete failed' };
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // AirLLM server management
+  // ---------------------------------------------------------------------------
+
+  handle('airllm:status', async (_event: IpcMainInvokeEvent) => {
+    return getAirLLMServer().getStatus();
+  });
+
+  handle('airllm:start', async (_event: IpcMainInvokeEvent) => {
+    return getAirLLMServer().start();
+  });
+
+  handle('airllm:stop', async (_event: IpcMainInvokeEvent) => {
+    return getAirLLMServer().stop();
+  });
+
+  handle(
+    'airllm:load-model',
+    async (
+      _event: IpcMainInvokeEvent,
+      modelId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const server = getAirLLMServer();
+      const status = server.getStatus();
+      if (!status.running) {
+        const started = await server.start();
+        if (!started.success) return started;
+      }
+      try {
+        server.setLoadedModel(null);
+        const res = await fetch('http://127.0.0.1:11435/api/load', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: modelId }),
+          signal: AbortSignal.timeout(3600000), // 1 hour for first load/download
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          try {
+            const parsed = JSON.parse(text) as { detail?: string };
+            const error = parsed.detail || text || `AirLLM returned status ${res.status}`;
+            return { success: false, error };
+          } catch {
+            return { success: false, error: text || `AirLLM returned status ${res.status}` };
+          }
+        }
+        server.setLoadedModel(modelId);
+        return { success: true };
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return {
+            success: false,
+            error:
+              'Model load timed out. Large first-time downloads can take 10-60+ minutes. Keep AirLLM running and retry.',
+          };
+        }
+        return { success: false, error: err instanceof Error ? err.message : 'Load failed' };
+      }
+    },
+  );
+
+  handle('airllm:server-url', async (_event: IpcMainInvokeEvent) => {
+    return { url: 'http://127.0.0.1:11435' };
+  });
+
+  handle('airllm:download-status', async (_event: IpcMainInvokeEvent) => {
+    try {
+      const res = await fetch('http://127.0.0.1:11435/api/download-status', {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) {
+        return { active: false, phase: 'error', status: `status ${res.status}` };
+      }
+      return await res.json();
+    } catch (err) {
+      return {
+        active: false,
+        phase: 'error',
+        status: err instanceof Error ? err.message : 'Download status unavailable',
+      };
+    }
   });
 
   handle('azure-foundry:get-config', async (_event: IpcMainInvokeEvent) => {
@@ -963,6 +1305,61 @@ export function registerIPCHandlers(): void {
     return storage.getAppSettings();
   });
 
+  handle('settings:user-name:get', async (_event: IpcMainInvokeEvent) => {
+    return storage.getUserName();
+  });
+
+  handle('settings:user-name:set', async (_event: IpcMainInvokeEvent, userName: string) => {
+    if (typeof userName !== 'string') {
+      throw new Error('Invalid user name');
+    }
+    const normalizedUserName = userName.trim();
+    if (normalizedUserName.length > 128) {
+      throw new Error('User name exceeds maximum length of 128');
+    }
+    storage.setUserName(normalizedUserName);
+  });
+
+  handle(
+    'settings:system-instructions:get',
+    async (_event: IpcMainInvokeEvent): Promise<string> => {
+      return storage.getSystemInstructions();
+    },
+  );
+
+  handle(
+    'settings:system-instructions:set',
+    async (_event: IpcMainInvokeEvent, systemInstructions: string) => {
+      if (typeof systemInstructions !== 'string') {
+        throw new Error('Invalid system instructions');
+      }
+      const normalizedSystemInstructions = systemInstructions.trim();
+      if (normalizedSystemInstructions.length > 8000) {
+        throw new Error('System instructions exceed maximum length of 8000');
+      }
+      storage.setSystemInstructions(normalizedSystemInstructions);
+    },
+  );
+
+  handle('settings:soul-markdown:get', async (_event: IpcMainInvokeEvent): Promise<string> => {
+    try {
+      return fs.readFileSync(resolveSoulMarkdownPath(), 'utf8');
+    } catch {
+      return '';
+    }
+  });
+
+  handle('settings:soul-markdown:set', async (_event: IpcMainInvokeEvent, markdown: string) => {
+    if (typeof markdown !== 'string') {
+      throw new Error('Invalid SOUL markdown');
+    }
+    if (markdown.length > 200_000) {
+      throw new Error('SOUL markdown exceeds maximum length of 200000');
+    }
+
+    fs.writeFileSync(resolveSoulMarkdownPath(), markdown, 'utf8');
+  });
+
   handle('settings:openai-base-url:get', async (_event: IpcMainInvokeEvent) => {
     return storage.getOpenAiBaseUrl();
   });
@@ -1027,8 +1424,20 @@ export function registerIPCHandlers(): void {
     'log:event',
     async (
       _event: IpcMainInvokeEvent,
-      _payload: { level?: string; message?: string; context?: Record<string, unknown> },
+      payload: { level?: string; message?: string; context?: Record<string, unknown> },
     ) => {
+      try {
+        const collector = getLogCollector();
+        const level = (payload?.level?.toUpperCase() ?? 'INFO') as Parameters<
+          typeof collector.log
+        >[0];
+        const message = payload?.message ?? '';
+        if (message) {
+          collector.log(level, 'ipc', message, payload?.context);
+        }
+      } catch {
+        // log collector may not be initialized; drop gracefully
+      }
       return { ok: true };
     },
   );
@@ -1053,13 +1462,7 @@ export function registerIPCHandlers(): void {
   handle(
     'speech:transcribe',
     async (_event: IpcMainInvokeEvent, audioData: ArrayBuffer, mimeType?: string) => {
-      console.log('[IPC] speech:transcribe received:', {
-        audioDataType: typeof audioData,
-        audioDataByteLength: audioData?.byteLength,
-        mimeType,
-      });
       const buffer = Buffer.from(audioData);
-      console.log('[IPC] Converted to buffer:', { bufferLength: buffer.length });
       return transcribeAudio(buffer, mimeType);
     },
   );

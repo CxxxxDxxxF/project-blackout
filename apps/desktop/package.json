@@ -137,6 +137,15 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../../tools/airllm-server",
+        "to": "airllm-server",
+        "filter": [
+          "**/*",
+          "!**/.venv/**",
+          "!**/__pycache__/**"
+        ]
       }
     ],
     "asar": true,
