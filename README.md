@@ -1,350 +1,109 @@
-<p align="center">
-  <strong>English</strong> | <a href="README.zh-CN.md">中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.es.md">Español</a> | <a href="README.tr.md">Türkçe</a> | <a href="README.ar.md">العربية</a> | <a href="README.id.md">Bahasa Indonesia</a>
-</p>
-
-<p align="center">
-  <img src="docs/banner.svg" alt="Accomplish - Open source AI desktop agent that automates file management, document creation, and browser tasks with your own AI API keys" width="100%" />
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License" /></a>
-  <a href="https://github.com/accomplish-ai/accomplish/stargazers"><img src="https://img.shields.io/github/stars/accomplish-ai/accomplish?style=flat-square&color=22c55e" alt="GitHub Stars" /></a>
-  <a href="https://github.com/accomplish-ai/accomplish/issues"><img src="https://img.shields.io/github/issues/accomplish-ai/accomplish?style=flat-square&color=22c55e" alt="GitHub Issues" /></a>
-  <a href="https://github.com/accomplish-ai/accomplish/commits"><img src="https://img.shields.io/github/last-commit/accomplish-ai/accomplish?style=flat-square&color=22c55e" alt="Last Commit" /></a>
-  <a href="https://downloads.accomplish.ai/downloads/0.3.9/macos/Accomplish-0.3.9-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS-0ea5e9?style=flat-square" alt="Download for macOS" /></a>
-  <a href="https://discord.gg/MepaTT55"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
-</p>
-
-# Accomplish™ (formerly Openwork) - Open Source AI Desktop Agent
-
-Accomplish is an open source AI desktop agent that automates file management, document creation, and browser tasks locally on your machine. Bring your own API keys (OpenAI, Anthropic, Google, xAI) or run local models via Ollama.
-
-<p align="center">
-  <strong>Runs locally on your machine. Bring your own API keys or local models. MIT licensed.</strong>
-</p>
-
-<p align="center">
-  <a href="https://downloads.accomplish.ai/downloads/0.3.9/macos/Accomplish-0.3.9-mac-arm64.dmg"><strong>Download for Mac (Apple Silicon)</strong></a>
-  ·
-  <a href="https://downloads.accomplish.ai/downloads/0.3.8/windows/Accomplish-v2-0.3.8-win-x64.exe"><strong>Download for Windows 11</strong></a>
-  ·
-  <a href="https://www.accomplish.ai/">Accomplish website</a>
-  ·
-  <a href="https://www.accomplish.ai/blog/">Accomplish blog</a>
-  ·
-  <a href="https://github.com/accomplish-ai/accomplish/releases">Accomplish releases</a>
-</p>
-
-<br />
-
----
-
-<br />
-
-## What makes it different
-
-<table>
-<tr>
-<td width="50%" valign="top" align="center">
-
-### 🖥️ It runs locally
-
-<div align="left">
-
-- Your files stay on your machine
-- You decide which folders it can touch
-- Nothing gets sent to Accomplish (or anyone else)
-
-</div>
-
-</td>
-<td width="50%" valign="top" align="center">
-
-### 🔑 You bring your own AI
-
-<div align="left">
-
-- Use your own API key (OpenAI, Anthropic, etc.)
-- Or run with [Ollama](https://ollama.com) (no API key needed)
-- No subscription, no upsell
-- It's a tool—not a service
-
-</div>
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top" align="center">
-
-### 📖 It's open source
-
-<div align="left">
-
-- Every line of code is on GitHub
-- MIT licensed
-- Change it, fork it, break it, fix it
-
-</div>
-
-</td>
-<td width="50%" valign="top" align="center">
-
-### ⚡ It acts, not just chats
-
-<div align="left">
-
-- File management
-- Document creation
-- Custom automations
-- Skill learning
-
-</div>
-
-</td>
-</tr>
-</table>
-
-<br />
-
----
-
-<br />
-
-## What it actually does
-
-|                                                                    |                                                                      |                                                                         |
-| :----------------------------------------------------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------- |
-| **📁 File Management**                                             | **✍️ Document Writing**                                              | **🔗 Tool Connections**                                                 |
-| Sort, rename, and move files based on content or rules you give it | Prompt it to write, summarize, or rewrite documents                  | Works with Notion, Google Drive, Dropbox, and more (through local APIs) |
-|                                                                    |                                                                      |                                                                         |
-| **⚙️ Custom Skills**                                               | **🛡️ Full Control**                                                  |                                                                         |
-| Define repeatable workflows, save them as skills                   | You approve every action. You can see logs. You can stop it anytime. |                                                                         |
-
-<br />
-
-## Use cases
-
-- Clean up messy folders by project, file type, or date
-- Draft, summarize, and rewrite docs, reports, and meeting notes
-- Automate browser workflows like research and form entry
-- Generate weekly updates from files and notes
-- Prepare meeting materials from docs and calendars
-
-<br />
-
-## Supported models and providers
-
-- Anthropic (Claude)
-- OpenAI (GPT)
-- Google AI (Gemini)
-- xAI (Grok)
-- DeepSeek
-- Moonshot AI (Kimi)
-- Z.AI (GLM)
-- MiniMax
-- Amazon Bedrock
-- Azure Foundry
-- OpenRouter
-- LiteLLM
-- Ollama (local models)
-- LM Studio (local models)
-
-<br />
-
-## Privacy and local-first
-
-Accomplish runs locally on your machine. Your files stay on your device, and you choose which folders it can access.
-
-<br />
-
-## System requirements
-
-- macOS (Apple Silicon)
-- Windows 11
-
-<br />
-
----
-
-<br />
-
-## How to use it
-
-> **Takes 2 minutes to set up.**
-
-| Step  | Action              | Details                                                                                                           |
-| :---: | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **1** | **Install the App** | Download the DMG and drag it into Applications                                                                    |
-| **2** | **Connect Your AI** | Use your own Google, OpenAI, Anthropic (or other) API key — or sign in with ChatGPT (Plus/Pro). No subscriptions. |
-| **3** | **Give It Access**  | Choose which folders it can see. You stay in control.                                                             |
-| **4** | **Start Working**   | Ask it to summarize a doc, clean a folder, or create a report. You approve everything.                            |
-
-<br />
-
-<br />
-
-<div align="center">
-
-[**Download for Mac (Apple Silicon)**](https://downloads.accomplish.ai/downloads/0.3.9/macos/Accomplish-0.3.9-mac-arm64.dmg) · [**Download for Windows 11**](https://downloads.accomplish.ai/downloads/0.3.8/windows/Accomplish-v2-0.3.8-win-x64.exe)
-
-</div>
-
-<br />
-
----
-
-<br />
-
-## Screenshots and Demo
-
-A quick look at Accomplish on macOS, plus a short demo video.
-
-<p align="center">
-  <a href="https://youtu.be/UJ0FIufMOlc?si=iFcu3VTG4B4q9VCB">
-    <img src="docs/video-thumbnail.png" alt="Accomplish demo - AI agent automating file management and browser tasks" width="600" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://youtu.be/UJ0FIufMOlc?si=iFcu3VTG4B4q9VCB">Watch the demo →</a>
-</p>
-
-<br />
-
-## FAQ
-
-**Does Accomplish run locally?**  
-Yes. Accomplish runs locally on your machine and you control which folders it can access.
-
-**Do I need an API key?**  
-You can use your own API keys (OpenAI, Anthropic, Google, xAI, etc.) or run local models via Ollama.
-
-**Is Accomplish free?**  
-Yes. Accomplish is open source and MIT licensed.
-
-**Which platforms are supported?**
-macOS (Apple Silicon) and Windows 11 are available now.
-
-<br />
-
----
-
-<br />
-
-## Development
+# Project Blackout
+
+Project Blackout is a desktop-first AI automation app built with:
+
+- `apps/desktop` (Electron shell + IPC + local services)
+- `apps/web` (React renderer UI)
+- `packages/agent-core` (shared core logic, storage, provider/config handling)
+
+It is designed to run local model workflows on your machine using Ollama and AirLLM.
+
+## New In This Update
+
+- Added `Local Model Manager` in Provider settings:
+  - list installed Ollama models
+  - pull/delete models from UI
+  - stream pull progress
+- Added `Hardware Advisor` (LLMFit-backed):
+  - scans hardware
+  - recommends model candidates
+  - quick actions to load to Ollama or AirLLM
+- Added AirLLM integration end-to-end:
+  - desktop-managed AirLLM server lifecycle
+  - model load API + download progress polling
+  - improved timeout/error handling for large first downloads
+- Added startup hardening for local Ollama flows:
+  - `pnpm dev:ollama` script
+  - `scripts/ensure-ollama.cjs` for reachability/start checks
+  - clearer setup and error messages in provider UI
+- Added About/identity settings support:
+  - editable `SOUL.md`
+  - `Your Name`
+  - `System Prompt`
+- Added local favicon fallback for localhost/private hosts to avoid noisy favicon fetch errors.
+
+## Quick Start
 
 ```bash
+git clone https://github.com/CxxxxDxxxF/project-blackout.git
+cd project-blackout
 pnpm install
+pnpm dev:ollama
+```
+
+`pnpm dev:ollama` ensures Ollama is reachable at `http://127.0.0.1:11434` before launching the app stack.
+
+## First-Time Local Model Setup
+
+If Ollama is not already running:
+
+```bash
+ollama serve
+```
+
+Pull at least one local Ollama model:
+
+```bash
+ollama pull llama3.2:3b
+```
+
+Then in app Settings -> Providers:
+
+1. Connect Ollama URL (default: `http://localhost:11434`)
+2. Use `Local Model Manager` to pull/manage models
+3. Optionally start AirLLM and load a Hugging Face model
+4. Use Hardware Advisor for recommendations
+
+## Architecture Notes
+
+- Desktop main process owns:
+  - provider IPC handlers
+  - AirLLM process/service management
+  - persisted settings and secure key workflows
+- Web renderer owns:
+  - provider forms and local-model UX
+  - About tab (`SOUL.md`, Name, System Prompt)
+  - progress/status display for long-running downloads
+
+## Useful Commands
+
+```bash
+# Development
 pnpm dev
+pnpm dev:web
+pnpm dev:ollama
+
+# Validation
+pnpm typecheck
+pnpm lint:eslint
+pnpm format:check
+
+# Workspace tests
+pnpm -F @accomplish/web test
+pnpm -F @accomplish/desktop test
+pnpm -F @accomplish_ai/agent-core test
 ```
 
-That's it.
+## Repository Structure
 
-### Settings Personalization
+- `apps/desktop` Electron app (main, preload, packaging scripts)
+- `apps/web` React renderer UI and integration tests
+- `packages/agent-core` provider/core/storage logic
+- `tools/airllm-server` AirLLM FastAPI bridge used by desktop integration
+- `tools/llmfit` hardware-based recommendation tooling
+- `scripts` project helper scripts (including Ollama checks)
 
-- Open `Settings -> About` to configure:
-  - `Your Name` (saved in app settings)
-  - `System Instructions` (saved in app settings)
-  - `SOUL.md` viewer (reads the repository `SOUL.md` file in local/dev runs)
+## Notes
 
-### Test Environment Notes
-
-- If `@accomplish_ai/agent-core` tests fail with a `better-sqlite3` ABI mismatch, rebuild native bindings for your current Node runtime:
-
-```bash
-pnpm -F @accomplish_ai/agent-core rebuild better-sqlite3
-```
-
-- In restricted sandbox environments, two proxy suites may fail with `listen EPERM` on `127.0.0.1:9228` / `127.0.0.1:9229`:
-  - `tests/unit/opencode/proxies/azure-foundry-proxy.test.ts`
-  - `tests/unit/opencode/proxies/moonshot-proxy.test.ts`
-
-These are environment-limited (port-binding) failures, not product regressions.
-
-- If Node fails to launch after a Homebrew upgrade due to a missing `libsimdjson` dylib, reinstalling Node is preferred. As a temporary local workaround, re-link the missing versioned library under `/opt/homebrew/opt/simdjson/lib/`.
-
-<details>
-<summary><strong>Prerequisites</strong></summary>
-
-- Node.js 20+
-- pnpm 9+
-
-</details>
-
-<details>
-<summary><strong>All Commands</strong></summary>
-
-| Command                                | Description                 |
-| -------------------------------------- | --------------------------- |
-| `pnpm dev`                             | Run desktop app in dev mode |
-| `pnpm dev:clean`                       | Dev mode with clean start   |
-| `pnpm build`                           | Build all workspaces        |
-| `pnpm build:desktop`                   | Build desktop app only      |
-| `pnpm lint`                            | TypeScript checks           |
-| `pnpm typecheck`                       | Type validation             |
-| `pnpm -F @accomplish/desktop test:e2e` | Playwright E2E tests        |
-
-</details>
-
-<details>
-<summary><strong>Environment Variables</strong></summary>
-
-| Variable          | Description                        |
-| ----------------- | ---------------------------------- |
-| `CLEAN_START=1`   | Clear all stored data on app start |
-| `E2E_SKIP_AUTH=1` | Skip onboarding flow (for testing) |
-
-</details>
-
-<details>
-<summary><strong>Architecture</strong></summary>
-
-```
-apps/
-  desktop/        # Electron app (main + preload + renderer)
-packages/
-  shared/         # Shared TypeScript types
-```
-
-The desktop app uses Electron with a React UI bundled via Vite. The main process spawns [OpenCode](https://github.com/sst/opencode) CLI using `node-pty` to execute tasks. API keys are stored securely in the OS keychain.
-
-See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
-
-</details>
-
-<br />
-
----
-
-<br />
-
-## Contributing
-
-Contributions welcome! Feel free to open a PR.
-
-```bash
-# Fork → Clone → Branch → Commit → Push → PR
-git checkout -b feature/amazing-feature
-git commit -m 'Add amazing feature'
-git push origin feature/amazing-feature
-```
-
-<br />
-
----
-
-<br />
-
-<div align="center">
-
-**[Accomplish website](https://www.accomplish.ai/)** · **[Accomplish blog](https://www.accomplish.ai/blog/)** · **[Accomplish releases](https://github.com/accomplish-ai/accomplish/releases)** · **[Issues](https://github.com/accomplish-ai/accomplish/issues)** · **[Twitter](https://x.com/Accomplish_ai)**
-
-<br />
-
-MIT License · Built by [Accomplish](https://www.accomplish.ai)
-
-<br />
-
-**Keywords:** AI agent, AI desktop agent, desktop automation, file management, document creation, browser automation, local-first, macOS, privacy-first, open source, Electron, computer use, AI assistant, workflow automation, OpenAI, Anthropic, Google, xAI, Claude, GPT-4, Ollama
-
-</div>
+- Initial AirLLM model downloads can be large and slow; progress is shown in Settings.
+- If a model is unavailable in Ollama registry, use a known Ollama tag or load via AirLLM with a Hugging Face repo ID.
