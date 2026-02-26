@@ -33,6 +33,36 @@ export function validateTaskConfig(config: TaskConfig): TaskConfig {
   if (config.outputSchema && typeof config.outputSchema === 'object') {
     validated.outputSchema = config.outputSchema;
   }
+  if (
+    config.modelOverride &&
+    typeof config.modelOverride.provider === 'string' &&
+    typeof config.modelOverride.model === 'string'
+  ) {
+    validated.modelOverride = {
+      provider: sanitizeString(config.modelOverride.provider, 'modelOverride.provider', 64),
+      model: sanitizeString(config.modelOverride.model, 'modelOverride.model', 256),
+    };
+  }
+  if (config.swarm) {
+    validated.swarm = {
+      enabled: Boolean(config.swarm.enabled),
+    };
+    if (typeof config.swarm.maxAgents === 'number') {
+      validated.swarm.maxAgents = Math.max(1, Math.min(10, Math.floor(config.swarm.maxAgents)));
+    }
+    if (config.swarm.budget) {
+      validated.swarm.budget = {};
+      if (typeof config.swarm.budget.maxEstimatedTokens === 'number') {
+        validated.swarm.budget.maxEstimatedTokens = Math.max(
+          1,
+          Math.floor(config.swarm.budget.maxEstimatedTokens),
+        );
+      }
+      if (typeof config.swarm.budget.maxWallMs === 'number') {
+        validated.swarm.budget.maxWallMs = Math.max(1, Math.floor(config.swarm.budget.maxWallMs));
+      }
+    }
+  }
 
   return validated;
 }

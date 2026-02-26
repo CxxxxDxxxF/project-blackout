@@ -11,10 +11,13 @@
 export type {
   TaskStatus,
   TaskConfig,
+  SwarmTaskConfig,
   Task,
   TaskAttachment,
   TaskMessage,
   TaskResult,
+  SwarmChildStatus,
+  SwarmChildSummary,
   TaskProgress,
   TaskUpdateEvent,
 } from './common/types/task.js';

@@ -103,10 +103,13 @@ export { STARTUP_STAGES } from './task.js';
 export type {
   TaskStatus,
   TaskConfig,
+  SwarmTaskConfig,
   Task,
   TaskAttachment,
   TaskMessage,
   TaskResult,
+  SwarmChildStatus,
+  SwarmChildSummary,
   StartupStage,
   TaskProgress,
   TaskUpdateEvent,

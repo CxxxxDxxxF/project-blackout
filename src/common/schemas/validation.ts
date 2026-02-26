@@ -8,6 +8,24 @@ export const taskConfigSchema = z.object({
   systemPromptAppend: z.string().optional(),
   outputSchema: z.record(z.any()).optional(),
   sessionId: z.string().optional(),
+  modelOverride: z
+    .object({
+      provider: z.string().min(1),
+      model: z.string().min(1),
+    })
+    .optional(),
+  swarm: z
+    .object({
+      enabled: z.boolean(),
+      maxAgents: z.number().int().min(1).max(10).optional(),
+      budget: z
+        .object({
+          maxEstimatedTokens: z.number().int().positive().optional(),
+          maxWallMs: z.number().int().positive().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   chrome: z.boolean().optional(),
 });
 

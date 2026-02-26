@@ -10,11 +10,21 @@ export async function fetchWithTimeout(
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      return await fetch(url, {
+      const response = await fetch(url, {
         ...options,
         signal: controller.signal,
       });
+
+      if (!response) {
+        throw new Error('Fetch returned no response');
+      }
+
+      return response;
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw err;
+      }
+
       if (attempt >= maxRetries) throw err;
     } finally {
       clearTimeout(timeoutId);
