@@ -12,6 +12,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import net from 'net';
 
 const APP_DATA_NAME = 'Accomplish';
 app.setPath('userData', path.join(app.getPath('appData'), APP_DATA_NAME));
@@ -87,6 +88,75 @@ let mainWindow: BrowserWindow | null = null;
 
 function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
+}
+
+function canConnectToUrl(rawUrl: string, timeoutMs = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(rawUrl);
+      const host = url.hostname;
+      const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+      const socket = net.createConnection({ host, port });
+
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        resolve(ok);
+      };
+
+      socket.setTimeout(timeoutMs);
+      socket.on('connect', () => finish(true));
+      socket.on('timeout', () => finish(false));
+      socket.on('error', () => finish(false));
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function resolveDevRouterUrl(): Promise<string | null> {
+  const candidates = [
+    ROUTER_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    if (await canConnectToUrl(candidate)) {
+      return candidate;
+    }
+  }
+
+  return ROUTER_URL || null;
+}
+
+async function loadRenderer(mainWindowRef: BrowserWindow): Promise<void> {
+  if (app.isPackaged) {
+    const indexPath = path.join(WEB_DIST, 'index.html');
+    console.log('[Main] Loading from file:', indexPath);
+    await mainWindowRef.loadFile(indexPath);
+    return;
+  }
+
+  const resolvedUrl = await resolveDevRouterUrl();
+  if (resolvedUrl) {
+    console.log('[Main] Loading from router URL:', resolvedUrl);
+    await mainWindowRef.loadURL(resolvedUrl);
+    return;
+  }
+
+  const fallbackIndexPath = path.join(WEB_DIST, 'index.html');
+  console.warn(
+    '[Main] No reachable dev router URL found; falling back to local file:',
+    fallbackIndexPath,
+  );
+  await mainWindowRef.loadFile(fallbackIndexPath);
 }
 
 function createWindow() {
@@ -173,14 +243,26 @@ function createWindow() {
     });
   });
 
-  if (ROUTER_URL) {
-    console.log('[Main] Loading from router URL:', ROUTER_URL);
-    mainWindow.loadURL(ROUTER_URL);
-  } else {
-    const indexPath = path.join(WEB_DIST, 'index.html');
-    console.log('[Main] Loading from file:', indexPath);
-    mainWindow.loadFile(indexPath);
-  }
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (isMainFrame) {
+        console.error('[Main] Renderer failed to load:', {
+          errorCode,
+          errorDescription,
+          validatedURL,
+        });
+      }
+    },
+  );
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Main] Renderer process exited unexpectedly:', details);
+  });
+
+  void loadRenderer(mainWindow).catch((error) => {
+    console.error('[Main] Failed to load renderer:', error);
+  });
 }
 
 process.on('uncaughtException', (error) => {
