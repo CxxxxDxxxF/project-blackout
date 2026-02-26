@@ -1,14 +1,30 @@
 # Project Blackout
 
-Project Blackout is a desktop-first AI automation app built with:
+Project Blackout is a desktop-first AI automation app that combines:
 
-- `apps/desktop` (Electron shell + IPC + local services)
+- `apps/desktop` (Electron shell, IPC, local process orchestration)
 - `apps/web` (React renderer UI)
-- `packages/agent-core` (shared core logic, storage, provider/config handling)
+- `packages/agent-core` (task execution core, storage, provider/config handling, MCP tooling)
 
-It is designed to run local model workflows on your machine using Ollama and AirLLM.
+It supports both cloud and local LLM workflows, including Ollama and AirLLM.
 
-## New In This Update
+## Core Features
+
+- Task execution pipeline with streaming updates, checkpoints, summaries, and status tracking
+- Model/provider management across major LLM providers (cloud + local)
+- Skills system with bundled skills and custom skill support
+- Connectors + tools workflow support inside task runs
+- Voice input/transcription support
+- Settings UX for providers, skills, connectors, voice, and about/profile controls
+- Secure API key handling and app settings persistence
+- SQLite-backed task history and app state migrations
+- Desktop+Web development setup in a single monorepo
+
+## Supported Providers
+
+Project Blackout includes broad provider support (15 total): Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot, ZAI, Bedrock, Azure Foundry, Ollama, OpenRouter, LiteLLM, MiniMax, LM Studio, and Custom.
+
+## What Changed In This Branch
 
 - Added `Local Model Manager` in Provider settings:
   - list installed Ollama models
@@ -31,6 +47,7 @@ It is designed to run local model workflows on your machine using Ollama and Air
   - `Your Name`
   - `System Prompt`
 - Added local favicon fallback for localhost/private hosts to avoid noisy favicon fetch errors.
+- Added additional bundled skills and vendored helper tooling required for local model workflows.
 
 ## Quick Start
 
@@ -42,6 +59,12 @@ pnpm dev:ollama
 ```
 
 `pnpm dev:ollama` ensures Ollama is reachable at `http://127.0.0.1:11434` before launching the app stack.
+
+If you want the web renderer only:
+
+```bash
+pnpm dev:web
+```
 
 ## First-Time Local Model Setup
 
@@ -64,16 +87,20 @@ Then in app Settings -> Providers:
 3. Optionally start AirLLM and load a Hugging Face model
 4. Use Hardware Advisor for recommendations
 
+## Settings Areas
+
+- Providers
+- Skills
+- Connectors
+- Voice Input
+- About (`SOUL.md`, name, and system prompt)
+
 ## Architecture Notes
 
-- Desktop main process owns:
-  - provider IPC handlers
-  - AirLLM process/service management
-  - persisted settings and secure key workflows
-- Web renderer owns:
-  - provider forms and local-model UX
-  - About tab (`SOUL.md`, Name, System Prompt)
-  - progress/status display for long-running downloads
+- Main architecture doc: `docs/architecture.md`
+- Desktop main process owns IPC, task runtime integration, local services (including AirLLM), and persistence wiring.
+- Web renderer owns settings/forms, task UI, progress surfaces, and user interaction flows.
+- Agent-core owns task logic, storage/migrations, provider/model logic, and shared types/utilities.
 
 ## Useful Commands
 
@@ -94,6 +121,16 @@ pnpm -F @accomplish/desktop test
 pnpm -F @accomplish_ai/agent-core test
 ```
 
+## Full Verification
+
+```bash
+pnpm lint
+pnpm format:check
+pnpm -F @accomplish/web test
+pnpm -F @accomplish/desktop test
+pnpm -F @accomplish_ai/agent-core test
+```
+
 ## Repository Structure
 
 - `apps/desktop` Electron app (main, preload, packaging scripts)
@@ -102,6 +139,7 @@ pnpm -F @accomplish_ai/agent-core test
 - `tools/airllm-server` AirLLM FastAPI bridge used by desktop integration
 - `tools/llmfit` hardware-based recommendation tooling
 - `scripts` project helper scripts (including Ollama checks)
+- `docs` architecture and implementation references
 
 ## Notes
 
