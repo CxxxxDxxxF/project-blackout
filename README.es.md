@@ -39,6 +39,9 @@ Accomplish es un agente de escritorio de IA de código abierto que automatiza la
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## Qué lo hace diferente

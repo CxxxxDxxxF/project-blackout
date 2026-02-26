@@ -39,6 +39,9 @@ Accomplish 是一款开源 AI 桌面代理，可在您的本地机器上自动�
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## 有何不同

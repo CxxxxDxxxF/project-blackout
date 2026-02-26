@@ -49,6 +49,31 @@ Project Blackout includes broad provider support (15 total): Anthropic, OpenAI, 
 - Added local favicon fallback for localhost/private hosts to avoid noisy favicon fetch errors.
 - Added additional bundled skills and vendored helper tooling required for local model workflows.
 
+## How Agent Thinking And Questions Work
+
+- The app surfaces structured progress (status updates, tool actions, checkpoints), not raw internal chain-of-thought dumps.
+- The runtime can stream thought/checkpoint events through MCP reporting tools for user-visible progress in task views.
+- If the agent needs user input, it must use the `ask-user-question` tool path:
+  - agent emits question request
+  - desktop question API receives it
+  - UI shows a modal
+  - user response is returned to the running task
+- File-sensitive operations use the permission flow and require explicit user approval.
+
+## How SOUL.md And System Prompt Work
+
+- `SOUL.md` is editable in Settings -> About and persisted to the project `SOUL.md` file.
+- `System Prompt` (system instructions) is editable in Settings -> About and persisted in app settings storage.
+- `Your Name` is also persisted and used as user-profile context.
+- At task launch, config generation combines base assistant rules + enabled skills + your saved instructions, so these settings affect runtime behavior.
+
+## Skills Overview
+
+- Skills are `SKILL.md` capability packs.
+- Bundled skills ship with the app; user skills can be added from file or GitHub.
+- Skills can be enabled/disabled in Settings -> Skills.
+- Enabled skills are injected into task runtime config so the agent can apply them during execution.
+
 ## Quick Start
 
 ```bash

@@ -39,6 +39,9 @@ Accomplishは、お使いのマシン上でローカルにファイル管理、�
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## 他との違い

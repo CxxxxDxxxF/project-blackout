@@ -39,6 +39,9 @@ Accomplish는 로컬 머신에서 파일 관리, 문서 작성, 브라우저 작
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## 무엇이 다른가

@@ -39,6 +39,9 @@ Accomplish adalah agen desktop AI open source yang mengotomatisasi manajemen fil
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## Apa yang membuatnya berbeda

@@ -39,6 +39,9 @@ Accomplish هو وكيل سطح مكتب ذكاء اصطناعي مفتوح ال
 
 ---
 
+> Note: Detailed architecture and the latest feature behavior (agent question flow, SOUL.md, system prompt, and skills) are documented in the English root README: [README.md](README.md).
+
+
 <br />
 
 ## ما الذي يميزه
