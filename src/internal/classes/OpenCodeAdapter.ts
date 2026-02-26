@@ -841,7 +841,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
               ? '/bin/zsh'
               : '/bin/sh');
 
-    const fullCommand = this.buildShellCommand(command, args);
+    let fullCommand = this.buildShellCommand(command, args);
+    // Explicitly set PATH in the shell string, to prevent .zshrc from re-overwriting it
+    if (process.env.PATH) {
+      fullCommand = `export PATH=${this.escapeShellArg(String(process.env.PATH))} && ${fullCommand}`;
+    }
+
     return { file: shell, args: ['-c', fullCommand] };
   }
 }

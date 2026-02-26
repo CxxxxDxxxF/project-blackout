@@ -20,6 +20,8 @@ interface AppSettingsRow {
   lmstudio_config: string | null;
   openai_base_url: string | null;
   theme: string;
+  user_name: string;
+  system_instructions: string;
 }
 
 export interface AppSettings {
@@ -32,6 +34,8 @@ export interface AppSettings {
   lmstudioConfig: LMStudioConfig | null;
   openaiBaseUrl: string;
   theme: ThemePreference;
+  userName: string;
+  systemInstructions: string;
 }
 
 function getRow(): AppSettingsRow {
@@ -169,6 +173,26 @@ export function setTheme(theme: ThemePreference): void {
   db.prepare('UPDATE app_settings SET theme = ? WHERE id = 1').run(theme);
 }
 
+export function getUserName(): string {
+  return getRow().user_name || '';
+}
+
+export function setUserName(userName: string): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET user_name = ? WHERE id = 1').run(userName || '');
+}
+
+export function getSystemInstructions(): string {
+  return getRow().system_instructions || '';
+}
+
+export function setSystemInstructions(systemInstructions: string): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET system_instructions = ? WHERE id = 1').run(
+    systemInstructions || '',
+  );
+}
+
 export function getAppSettings(): AppSettings {
   const row = getRow();
   return {
@@ -183,6 +207,8 @@ export function getAppSettings(): AppSettings {
     theme: VALID_THEMES.includes(row.theme as ThemePreference)
       ? (row.theme as ThemePreference)
       : 'system',
+    userName: row.user_name || '',
+    systemInstructions: row.system_instructions || '',
   };
 }
 
@@ -198,7 +224,9 @@ export function clearAppSettings(): void {
       azure_foundry_config = NULL,
       lmstudio_config = NULL,
       openai_base_url = '',
-      theme = 'system'
+      theme = 'system',
+      user_name = '',
+      system_instructions = ''
     WHERE id = 1`,
   ).run();
 }
