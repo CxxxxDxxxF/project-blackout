@@ -219,7 +219,7 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
 export async function buildCliArgs(config: TaskConfig, _taskId: string): Promise<string[]> {
   const storage = getStorage();
   const activeModel = storage.getActiveProviderModel();
-  const selectedModel = activeModel || storage.getSelectedModel();
+  const selectedModel = config.modelOverride || activeModel || storage.getSelectedModel();
 
   return coreBuildCliArgs({
     prompt: config.prompt,

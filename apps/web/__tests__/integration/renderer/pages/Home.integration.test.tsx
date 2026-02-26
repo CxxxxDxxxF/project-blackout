@@ -65,6 +65,9 @@ const mockAccomplish = {
   validateBedrockCredentials: vi.fn().mockResolvedValue({ valid: true }),
   saveBedrockCredentials: vi.fn().mockResolvedValue(undefined),
   speechIsConfigured: vi.fn().mockResolvedValue(true),
+  getUserName: vi.fn().mockResolvedValue(''),
+  getSwarmSettings: vi.fn().mockResolvedValue({ enabled: false, defaults: { maxAgents: 3 } }),
+  setSwarmSettings: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock the accomplish module
@@ -253,8 +256,8 @@ describe('Home Page Integration', () => {
 
       // Assert - Check for some example use cases (expanded by default)
       await waitFor(() => {
-        expect(screen.getByText('Calendar Prep Notes')).toBeInTheDocument();
-        expect(screen.getByText('Inbox Promo Cleanup')).toBeInTheDocument();
+        expect(screen.getByText('Repo Onboarding Checklist')).toBeInTheDocument();
+        expect(screen.getByText('PR Review Assistant')).toBeInTheDocument();
       });
     });
 
@@ -506,11 +509,11 @@ describe('Home Page Integration', () => {
         </MemoryRouter>,
       );
 
-      // Act - Click on Calendar Prep Notes example (expanded by default)
+      // Act - Click on first example in current prompt set
       await waitFor(() => {
-        expect(screen.getByText('Calendar Prep Notes')).toBeInTheDocument();
+        expect(screen.getByText('Repo Onboarding Checklist')).toBeInTheDocument();
       });
-      const exampleButton = screen.getByText('Calendar Prep Notes').closest('button');
+      const exampleButton = screen.getByText('Repo Onboarding Checklist').closest('button');
       expect(exampleButton).toBeInTheDocument();
       fireEvent.click(exampleButton!);
 
@@ -518,7 +521,7 @@ describe('Home Page Integration', () => {
       await waitFor(() => {
         const textarea = screen.getByTestId('task-input-textarea') as HTMLTextAreaElement;
         expect(textarea.value.length).toBeGreaterThan(0);
-        expect(textarea.value.toLowerCase()).toContain('calendar');
+        expect(textarea.value.toLowerCase()).toContain('repository');
       });
     });
 
@@ -533,11 +536,11 @@ describe('Home Page Integration', () => {
       // Assert - Examples section heading and cards are always visible
       await waitFor(() => {
         expect(screen.getByText('Example Prompts')).toBeInTheDocument();
-        expect(screen.getByText('Calendar Prep Notes')).toBeInTheDocument();
+        expect(screen.getByText('Repo Onboarding Checklist')).toBeInTheDocument();
       });
     });
 
-    it('should render all nine example use cases', async () => {
+    it('should render first prompt page examples', async () => {
       // Arrange & Act
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -545,17 +548,13 @@ describe('Home Page Integration', () => {
         </MemoryRouter>,
       );
 
-      // Assert - examples are expanded by default
       const expectedExamples = [
-        'Calendar Prep Notes',
-        'Inbox Promo Cleanup',
-        'Competitor Pricing Deck',
-        'Notion API Audit',
-        'Staging vs Prod Visual Check',
-        'Production Broken Links',
-        'Portfolio Monitoring',
-        'Job Application Automation',
-        'Event Calendar Builder',
+        'Repo Onboarding Checklist',
+        'PR Review Assistant',
+        'Bug Repro Plan',
+        'API Contract Diff',
+        'Test Failure Triage',
+        'Release Notes From Commits',
       ];
 
       await waitFor(() => {

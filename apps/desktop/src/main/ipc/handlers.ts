@@ -26,6 +26,7 @@ import {
   sanitizeString,
   generateTaskSummary,
   validateTaskConfig,
+  runSwarmOrchestrator,
 } from '@accomplish_ai/agent-core';
 import { createTaskId, createMessageId } from '@accomplish_ai/agent-core';
 import {
@@ -81,11 +82,15 @@ import type {
   TaskConfig,
   PermissionResponse,
   TaskMessage,
+  TaskResult,
+  TaskCallbacks,
   SelectedModel,
   OllamaConfig,
   AzureFoundryConfig,
   LiteLLMConfig,
   LMStudioConfig,
+  SwarmChildSummary,
+  SwarmRunChildInput,
 } from '@accomplish_ai/agent-core';
 import {
   DEFAULT_PROVIDERS,
@@ -110,7 +115,10 @@ const CURRENT_FILE_DIR = path.dirname(fileURLToPath(import.meta.url));
 function canAutoStartOllama(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
+    return (
+      parsed.protocol === 'http:' &&
+      (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')
+    );
   } catch {
     return false;
   }
@@ -118,7 +126,9 @@ function canAutoStartOllama(url: string): boolean {
 
 async function isOllamaReachable(url: string): Promise<boolean> {
   try {
-    const res = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${url.replace(/\/+$/, '')}/api/tags`, {
+      signal: AbortSignal.timeout(2000),
+    });
     return res.ok;
   } catch {
     return false;
@@ -151,7 +161,10 @@ async function ensureOllamaRunning(url: string): Promise<{ ok: boolean; error?: 
   }
 
   if (!(await hasOllamaCli())) {
-    return { ok: false, error: 'Ollama CLI is not installed. Install from https://ollama.com/download' };
+    return {
+      ok: false,
+      error: 'Ollama CLI is not installed. Install from https://ollama.com/download',
+    };
   }
 
   try {
@@ -228,6 +241,134 @@ function handle<Args extends unknown[], ReturnType = unknown>(
   });
 }
 
+const DEFAULT_SWARM_MAX_AGENTS = 3;
+const DEFAULT_SWARM_CHILD_TIMEOUT_MS = 10 * 60 * 1000;
+const activeSwarmChildren = new Map<string, Set<string>>();
+
+function isTransientChildError(error: string): boolean {
+  return (
+    /\btimeout\b/i.test(error) ||
+    /\bETIMEDOUT\b/i.test(error) ||
+    /\bECONNRESET\b/i.test(error) ||
+    /\bECONNREFUSED\b/i.test(error) ||
+    /\bEPIPE\b/i.test(error) ||
+    /\baborted\b/i.test(error)
+  );
+}
+
+function buildSwarmOutput(childSummaries: SwarmChildSummary[], combinedOutput: string): string {
+  const statusLines = childSummaries.map((child) => {
+    const detail = child.error ? ` - ${child.error}` : '';
+    return `- ${child.role} (${child.providerId}/${child.modelId}): ${child.status}${detail}`;
+  });
+  const sections = ['Swarm execution summary:', ...statusLines];
+  if (combinedOutput.trim()) {
+    sections.push('', combinedOutput.trim());
+  }
+  return sections.join('\n');
+}
+
+async function runSwarmChildTask(
+  taskManager: ReturnType<typeof getTaskManager>,
+  input: SwarmRunChildInput,
+  createCallbacks: (childId: string) => TaskCallbacks,
+): Promise<{
+  status: 'completed' | 'failed' | 'cancelled' | 'timed_out';
+  output?: string;
+  error?: string;
+  transient?: boolean;
+}> {
+  const childCallbacks = createCallbacks(input.childId);
+  const outputChunks: string[] = [];
+
+  const completionPromise = new Promise<{
+    status: 'completed' | 'failed' | 'cancelled' | 'timed_out';
+    output?: string;
+    error?: string;
+    transient?: boolean;
+  }>((resolve) => {
+    const timeout = setTimeout(async () => {
+      try {
+        await taskManager.cancelTask(input.childId);
+      } catch {
+        // intentionally empty
+      }
+      resolve({
+        status: 'timed_out',
+        error: `Child timed out after ${Math.round(input.timeoutMs / 1000)}s`,
+        transient: true,
+      });
+    }, input.timeoutMs);
+
+    const wrapResolve = (result: {
+      status: 'completed' | 'failed' | 'cancelled' | 'timed_out';
+      output?: string;
+      error?: string;
+      transient?: boolean;
+    }) => {
+      clearTimeout(timeout);
+      resolve(result);
+    };
+
+    const onComplete = childCallbacks.onComplete;
+    const onError = childCallbacks.onError;
+    const onBatched = childCallbacks.onBatchedMessages;
+
+    childCallbacks.onBatchedMessages = (messages) => {
+      onBatched?.(messages);
+      for (const message of messages) {
+        if (message.type === 'assistant' && message.content) {
+          outputChunks.push(message.content);
+        }
+      }
+    };
+
+    childCallbacks.onComplete = (result: TaskResult) => {
+      onComplete(result);
+      if (result.status === 'success') {
+        wrapResolve({ status: 'completed', output: outputChunks.join('\n\n') });
+        return;
+      }
+      if (result.status === 'interrupted') {
+        wrapResolve({ status: 'cancelled', output: outputChunks.join('\n\n') });
+        return;
+      }
+      wrapResolve({
+        status: 'failed',
+        output: outputChunks.join('\n\n'),
+        error: result.error || 'Child task failed',
+        transient: isTransientChildError(result.error || ''),
+      });
+    };
+
+    childCallbacks.onError = (error: Error) => {
+      onError(error);
+      const message = error.message || 'Child task error';
+      wrapResolve({
+        status: 'failed',
+        output: outputChunks.join('\n\n'),
+        error: message,
+        transient: isTransientChildError(message),
+      });
+    };
+  });
+
+  await taskManager.startTask(
+    input.childId,
+    {
+      prompt: input.prompt,
+      modelOverride: {
+        provider: input.providerId,
+        model: input.modelId,
+      },
+      modelId: input.modelId,
+      swarm: { enabled: false },
+    },
+    childCallbacks,
+  );
+  return completionPromise;
+}
+
 export function registerIPCHandlers(): void {
   const storage = getStorage();
   const taskManager = getTaskManager();
@@ -282,16 +423,156 @@ export function registerIPCHandlers(): void {
       sender,
     });
 
-    const task = await taskManager.startTask(taskId, validatedConfig, callbacks);
-
     const initialUserMessage: TaskMessage = {
       id: createMessageId(),
       type: 'user',
       content: validatedConfig.prompt,
       timestamp: new Date().toISOString(),
     };
-    task.messages = [initialUserMessage];
 
+    const swarmEnabled =
+      Boolean(validatedConfig.swarm?.enabled) &&
+      storage.getSwarmEnabled() &&
+      !isMockTaskEventsEnabled();
+
+    if (swarmEnabled) {
+      const task = {
+        id: taskId,
+        prompt: validatedConfig.prompt,
+        status: 'running' as const,
+        messages: [initialUserMessage],
+        createdAt: new Date().toISOString(),
+      };
+
+      storage.saveTask(task);
+
+      const childIds = new Set<string>();
+      activeSwarmChildren.set(taskId, childIds);
+
+      const readyProviders = Object.values(storage.getProviderSettings().connectedProviders).filter(
+        (provider): provider is ConnectedProvider =>
+          !!provider && provider.connectionStatus === 'connected' && !!provider.selectedModelId,
+      );
+
+      void (async () => {
+        try {
+          callbacks.onProgress({
+            stage: 'thinking',
+            message: 'Swarm manager is decomposing task...',
+          });
+
+          const swarmResult = await runSwarmOrchestrator({
+            parentTaskId: taskId,
+            prompt: validatedConfig.prompt,
+            swarm: {
+              enabled: true,
+              maxAgents:
+                validatedConfig.swarm?.maxAgents ??
+                storage.getSwarmDefaults().maxAgents ??
+                DEFAULT_SWARM_MAX_AGENTS,
+              budget: {
+                ...storage.getSwarmDefaults().budget,
+                ...validatedConfig.swarm?.budget,
+              },
+            },
+            readyProviders,
+            parentModel: activeModel
+              ? {
+                  providerId: activeModel.provider as ProviderId,
+                  modelId: activeModel.model,
+                }
+              : undefined,
+            onChildUpdate: (summary) => {
+              if (!window.isDestroyed() && !sender.isDestroyed()) {
+                sender.send('task:update', {
+                  taskId,
+                  type: 'swarm-child-update',
+                  swarmChild: summary,
+                });
+              }
+            },
+            runChild: async (input) => {
+              childIds.add(input.childId);
+              const childCallbackFactory = (childId: string): TaskCallbacks =>
+                createTaskCallbacks({
+                  taskId: childId,
+                  window,
+                  sender,
+                });
+              const result = await runSwarmChildTask(
+                taskManager,
+                { ...input, timeoutMs: DEFAULT_SWARM_CHILD_TIMEOUT_MS },
+                childCallbackFactory,
+              );
+              childIds.delete(input.childId);
+              return result;
+            },
+          });
+
+          const finalMessage: TaskMessage = {
+            id: createMessageId(),
+            type: 'assistant',
+            content: buildSwarmOutput(swarmResult.childSummaries, swarmResult.combinedOutput),
+            timestamp: new Date().toISOString(),
+          };
+          callbacks.onBatchedMessages?.([finalMessage]);
+
+          callbacks.onComplete({
+            status: 'success',
+            partial: swarmResult.partial,
+            swarmChildren: swarmResult.childSummaries,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Swarm orchestration failed unexpectedly';
+          callbacks.onDebug?.({
+            type: 'warning',
+            message: `Swarm setup failed, falling back to single-agent mode: ${message}`,
+          });
+          try {
+            await taskManager.startTask(
+              taskId,
+              {
+                ...validatedConfig,
+                swarm: { enabled: false },
+              },
+              callbacks,
+            );
+          } catch (fallbackError) {
+            callbacks.onError(
+              fallbackError instanceof Error
+                ? fallbackError
+                : new Error('Fallback single-agent execution failed'),
+            );
+          }
+        } finally {
+          activeSwarmChildren.delete(taskId);
+        }
+      })();
+
+      generateTaskSummary(validatedConfig.prompt, getApiKey)
+        .then((summary) => {
+          storage.updateTaskSummary(taskId, summary);
+          if (!window.isDestroyed() && !sender.isDestroyed()) {
+            try {
+              sender.send('task:summary', { taskId, summary });
+            } catch (error) {
+              console.warn('[IPC] Failed to send task summary to renderer', {
+                taskId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('[IPC] Failed to generate task summary:', err);
+        });
+
+      return task;
+    }
+
+    const task = await taskManager.startTask(taskId, validatedConfig, callbacks);
+    task.messages = [initialUserMessage];
     storage.saveTask(task);
 
     generateTaskSummary(validatedConfig.prompt, getApiKey)
@@ -318,6 +599,22 @@ export function registerIPCHandlers(): void {
   handle('task:cancel', async (_event: IpcMainInvokeEvent, taskId?: string) => {
     if (!taskId) return;
 
+    const swarmChildIds = activeSwarmChildren.get(taskId);
+    if (swarmChildIds) {
+      for (const childId of swarmChildIds) {
+        if (taskManager.isTaskQueued(childId)) {
+          taskManager.cancelQueuedTask(childId);
+          continue;
+        }
+        if (taskManager.hasActiveTask(childId)) {
+          await taskManager.cancelTask(childId);
+        }
+      }
+      activeSwarmChildren.delete(taskId);
+      storage.updateTaskStatus(taskId, 'cancelled', new Date().toISOString());
+      return;
+    }
+
     if (taskManager.isTaskQueued(taskId)) {
       taskManager.cancelQueuedTask(taskId);
       storage.updateTaskStatus(taskId, 'cancelled', new Date().toISOString());
@@ -332,6 +629,16 @@ export function registerIPCHandlers(): void {
 
   handle('task:interrupt', async (_event: IpcMainInvokeEvent, taskId?: string) => {
     if (!taskId) return;
+
+    const swarmChildIds = activeSwarmChildren.get(taskId);
+    if (swarmChildIds) {
+      for (const childId of swarmChildIds) {
+        if (taskManager.hasActiveTask(childId)) {
+          await taskManager.interruptTask(childId);
+        }
+      }
+      return;
+    }
 
     if (taskManager.hasActiveTask(taskId)) {
       await taskManager.interruptTask(taskId);
@@ -1304,6 +1611,37 @@ export function registerIPCHandlers(): void {
   handle('settings:app-settings', async (_event: IpcMainInvokeEvent) => {
     return storage.getAppSettings();
   });
+
+  handle('settings:swarm:get', async (_event: IpcMainInvokeEvent) => {
+    return {
+      enabled: storage.getSwarmEnabled(),
+      defaults: storage.getSwarmDefaults(),
+    };
+  });
+
+  handle(
+    'settings:swarm:set',
+    async (
+      _event: IpcMainInvokeEvent,
+      payload: {
+        enabled?: boolean;
+        defaults?: {
+          maxAgents?: number;
+          budget?: { maxEstimatedTokens?: number; maxWallMs?: number };
+        };
+      },
+    ) => {
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid swarm settings payload');
+      }
+      if (typeof payload.enabled === 'boolean') {
+        storage.setSwarmEnabled(payload.enabled);
+      }
+      if (payload.defaults) {
+        storage.setSwarmDefaults(payload.defaults);
+      }
+    },
+  );
 
   handle('settings:user-name:get', async (_event: IpcMainInvokeEvent) => {
     return storage.getUserName();

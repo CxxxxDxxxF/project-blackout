@@ -41,6 +41,10 @@ import {
   setUserName,
   getSystemInstructions,
   setSystemInstructions,
+  getSwarmEnabled,
+  setSwarmEnabled,
+  getSwarmDefaults,
+  setSwarmDefaults,
   getAppSettings,
   clearAppSettings,
 } from '../storage/repositories/appSettings.js';
@@ -130,6 +134,10 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
     setUserName: (userName) => setUserName(userName),
     getSystemInstructions: () => getSystemInstructions(),
     setSystemInstructions: (systemInstructions) => setSystemInstructions(systemInstructions),
+    getSwarmEnabled: () => getSwarmEnabled(),
+    setSwarmEnabled: (enabled) => setSwarmEnabled(enabled),
+    getSwarmDefaults: () => getSwarmDefaults(),
+    setSwarmDefaults: (defaults) => setSwarmDefaults(defaults),
     getAppSettings: () => getAppSettings(),
     clearAppSettings: () => clearAppSettings(),
 

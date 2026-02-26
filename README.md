@@ -11,6 +11,7 @@ It supports both cloud and local LLM workflows, including Ollama and AirLLM.
 ## Core Features
 
 - Task execution pipeline with streaming updates, checkpoints, summaries, and status tracking
+- Optional swarm orchestration mode (manager + child agents, max 3 concurrent) behind feature flag
 - Model/provider management across major LLM providers (cloud + local)
 - Skills system with bundled skills and custom skill support
 - Connectors + tools workflow support inside task runs
@@ -26,6 +27,12 @@ Project Blackout includes broad provider support (15 total): Anthropic, OpenAI, 
 
 ## What Changed In This Branch
 
+- Added V1 swarm orchestration:
+  - per-run `Swarm Mode` toggle from Home input
+  - manager/child execution with role-based routing from ready providers
+  - parent timeline with child agent status updates
+  - partial completion + transient retry + per-child timeout guardrails
+  - global swarm settings (`enabled`, default max agents)
 - Added `Local Model Manager` in Provider settings:
   - list installed Ollama models
   - pull/delete models from UI

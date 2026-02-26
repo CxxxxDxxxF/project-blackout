@@ -20,6 +20,7 @@ export type {
   StorageOptions,
   StoredTask,
   AppSettings,
+  SwarmDefaults,
   ThemePreference,
   TaskStorageAPI,
   AppSettingsAPI,

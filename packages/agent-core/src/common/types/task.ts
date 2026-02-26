@@ -18,6 +18,24 @@ export interface TaskConfig {
   sessionId?: string;
   /** Model ID for display name in progress events */
   modelId?: string;
+  /**
+   * Optional per-task model override used by swarm child routing.
+   * Internal use: lets concurrent child tasks target different providers/models.
+   */
+  modelOverride?: {
+    provider: string;
+    model: string;
+  };
+  swarm?: SwarmTaskConfig;
+}
+
+export interface SwarmTaskConfig {
+  enabled: boolean;
+  maxAgents?: number;
+  budget?: {
+    maxEstimatedTokens?: number;
+    maxWallMs?: number;
+  };
 }
 
 export interface Task {
@@ -54,6 +72,28 @@ export interface TaskResult {
   sessionId?: string;
   durationMs?: number;
   error?: string;
+  partial?: boolean;
+  swarmChildren?: SwarmChildSummary[];
+}
+
+export type SwarmChildStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'timed_out';
+
+export interface SwarmChildSummary {
+  childId: string;
+  role: 'researcher' | 'coder' | 'reviewer';
+  providerId: string;
+  modelId: string;
+  status: SwarmChildStatus;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  outputPreview?: string;
 }
 
 export type StartupStage =
@@ -91,9 +131,10 @@ export interface TaskProgress {
 
 export interface TaskUpdateEvent {
   taskId: string;
-  type: 'message' | 'progress' | 'complete' | 'error';
+  type: 'message' | 'progress' | 'complete' | 'error' | 'swarm-child-update';
   message?: TaskMessage;
   progress?: TaskProgress;
   result?: TaskResult;
   error?: string;
+  swarmChild?: SwarmChildSummary;
 }

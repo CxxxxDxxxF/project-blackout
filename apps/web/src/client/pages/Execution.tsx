@@ -19,6 +19,7 @@ import {
   Square,
   Download,
   CaretDown,
+  CaretRight,
 } from '@phosphor-icons/react';
 import { isWaitingForUser } from '../lib/waiting-detection';
 import { SettingsDialog } from '../components/layout/SettingsDialog';
@@ -86,7 +87,9 @@ export function ExecutionPage() {
     clearStartupStage,
     todos,
     todosTaskId,
+    getSwarmChildrenForTask,
   } = useTaskStore();
+  const [expandedSwarmChildren, setExpandedSwarmChildren] = useState<Record<string, boolean>>({});
 
   const speechInput = useSpeechInput({
     onTranscriptionComplete: (text) => {
@@ -232,6 +235,8 @@ export function ExecutionPage() {
   const isComplete = ['completed', 'failed', 'cancelled', 'interrupted'].includes(
     currentTask?.status ?? '',
   );
+  const swarmChildren = currentTask ? getSwarmChildrenForTask(currentTask.id) : [];
+  const hasSwarmChildren = swarmChildren.length > 0;
   const hasSession = currentTask?.sessionId || currentTask?.result?.sessionId;
   const canFollowUp = isComplete && (hasSession || currentTask?.status === 'interrupted');
 
@@ -570,6 +575,54 @@ export function ExecutionPage() {
               data-testid="messages-scroll-container"
             >
               <div className="max-w-4xl mx-auto space-y-4">
+                {hasSwarmChildren && (
+                  <Card className="p-3 space-y-2" data-testid="swarm-children-panel">
+                    <div className="text-sm font-medium">Swarm Agents</div>
+                    {swarmChildren.map((child) => {
+                      const expanded = expandedSwarmChildren[child.childId] === true;
+                      return (
+                        <div key={child.childId} className="rounded-md border border-border">
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/40"
+                            onClick={() => {
+                              setExpandedSwarmChildren((prev) => ({
+                                ...prev,
+                                [child.childId]: !expanded,
+                              }));
+                            }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {expanded ? (
+                                <CaretDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                              ) : (
+                                <CaretRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                              )}
+                              <span className="text-sm capitalize">{child.role}</span>
+                              <span className="text-xs text-muted-foreground truncate">
+                                {child.providerId}/{child.modelId}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{child.status}</span>
+                          </button>
+                          {expanded && (
+                            <div className="px-3 pb-3">
+                              {child.error && (
+                                <p className="text-xs text-destructive mb-1">{child.error}</p>
+                              )}
+                              {child.outputPreview && (
+                                <pre className="text-xs whitespace-pre-wrap text-muted-foreground bg-muted/30 rounded p-2 overflow-x-auto">
+                                  {child.outputPreview}
+                                </pre>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </Card>
+                )}
+
                 {currentTask.messages
                   .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'bash'))
                   .map((message, index, filteredMessages) => {

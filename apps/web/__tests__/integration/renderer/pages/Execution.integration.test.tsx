@@ -126,6 +126,7 @@ let mockStoreState: {
   setupProgress: string | null;
   setupProgressTaskId: string | null;
   setupDownloadStep: number;
+  getSwarmChildrenForTask: (taskId: string) => unknown[];
 } = {
   currentTask: null,
   loadTaskById: mockLoadTaskById,
@@ -146,6 +147,7 @@ let mockStoreState: {
   setupProgress: null,
   setupProgressTaskId: null,
   setupDownloadStep: 1,
+  getSwarmChildrenForTask: () => [],
 };
 
 // Mock the task store - needs both hook usage and .getState() for direct calls
@@ -267,6 +269,7 @@ describe('Execution Page Integration', () => {
       setupProgress: null,
       setupProgressTaskId: null,
       setupDownloadStep: 1,
+      getSwarmChildrenForTask: () => [],
     };
   });
 

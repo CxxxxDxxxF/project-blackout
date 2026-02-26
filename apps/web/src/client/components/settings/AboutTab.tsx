@@ -13,6 +13,14 @@ interface AboutTabProps {
     setSystemInstructions: (systemInstructions: string) => Promise<void>;
     getSoulMarkdown: () => Promise<string>;
     setSoulMarkdown: (markdown: string) => Promise<void>;
+    getSwarmSettings: () => Promise<{
+      enabled: boolean;
+      defaults?: { maxAgents?: number };
+    }>;
+    setSwarmSettings: (payload: {
+      enabled?: boolean;
+      defaults?: { maxAgents?: number };
+    }) => Promise<void>;
   };
 }
 
@@ -21,6 +29,8 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
   const [userName, setUserName] = useState('');
   const [systemInstructions, setSystemInstructions] = useState('');
   const [soulMarkdown, setSoulMarkdown] = useState('');
+  const [swarmEnabled, setSwarmEnabled] = useState(false);
+  const [swarmMaxAgents, setSwarmMaxAgents] = useState(3);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
 
@@ -29,17 +39,21 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
 
     const load = async () => {
       try {
-        const [loadedUserName, loadedSystemInstructions, loadedSoulMarkdown] = await Promise.all([
-          accomplish.getUserName(),
-          accomplish.getSystemInstructions(),
-          accomplish.getSoulMarkdown(),
-        ]);
+        const [loadedUserName, loadedSystemInstructions, loadedSoulMarkdown, loadedSwarm] =
+          await Promise.all([
+            accomplish.getUserName(),
+            accomplish.getSystemInstructions(),
+            accomplish.getSoulMarkdown(),
+            accomplish.getSwarmSettings(),
+          ]);
         if (!mounted) {
           return;
         }
         setUserName(loadedUserName);
         setSystemInstructions(loadedSystemInstructions);
         setSoulMarkdown(loadedSoulMarkdown);
+        setSwarmEnabled(Boolean(loadedSwarm.enabled));
+        setSwarmMaxAgents(loadedSwarm.defaults?.maxAgents ?? 3);
       } catch (error) {
         if (!mounted) {
           return;
@@ -65,6 +79,10 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
         accomplish.setUserName(userName),
         accomplish.setSystemInstructions(systemInstructions),
         accomplish.setSoulMarkdown(soulMarkdown),
+        accomplish.setSwarmSettings({
+          enabled: swarmEnabled,
+          defaults: { maxAgents: swarmMaxAgents },
+        }),
       ]);
       setSaveState('saved');
       window.setTimeout(() => {
@@ -125,6 +143,33 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
         {saveState === 'error' && (
           <div className="text-sm text-destructive">{saveError || 'Save failed'}</div>
         )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+        <div className="text-sm text-muted-foreground">Swarm Orchestration (Beta)</div>
+        <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+          <span className="text-sm">Enable Swarm Mode toggle on Home</span>
+          <input
+            type="checkbox"
+            checked={swarmEnabled}
+            onChange={(e) => setSwarmEnabled(e.target.checked)}
+            data-testid="settings-swarm-enabled"
+          />
+        </label>
+        <div>
+          <div className="text-sm text-muted-foreground">Default Max Agents</div>
+          <Input
+            type="number"
+            min={1}
+            max={3}
+            value={swarmMaxAgents}
+            onChange={(e) =>
+              setSwarmMaxAgents(Math.max(1, Math.min(3, Number(e.target.value) || 1)))
+            }
+            data-testid="settings-swarm-max-agents"
+            className="mt-2 max-w-28"
+          />
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-6">

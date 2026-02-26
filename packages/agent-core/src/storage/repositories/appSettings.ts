@@ -5,7 +5,7 @@ import type {
   AzureFoundryConfig,
   LMStudioConfig,
 } from '../../common/types/provider.js';
-import type { ThemePreference } from '../../types/storage.js';
+import type { ThemePreference, SwarmDefaults } from '../../types/storage.js';
 import { getDatabase } from '../database.js';
 import { safeParseJsonWithFallback } from '../../utils/json.js';
 
@@ -22,6 +22,8 @@ interface AppSettingsRow {
   theme: string;
   user_name: string;
   system_instructions: string;
+  swarm_enabled: number;
+  swarm_defaults: string;
 }
 
 export interface AppSettings {
@@ -36,6 +38,8 @@ export interface AppSettings {
   theme: ThemePreference;
   userName: string;
   systemInstructions: string;
+  swarmEnabled: boolean;
+  swarmDefaults: SwarmDefaults;
 }
 
 function getRow(): AppSettingsRow {
@@ -193,6 +197,48 @@ export function setSystemInstructions(systemInstructions: string): void {
   );
 }
 
+export function getSwarmEnabled(): boolean {
+  return getRow().swarm_enabled === 1;
+}
+
+export function setSwarmEnabled(enabled: boolean): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET swarm_enabled = ? WHERE id = 1').run(enabled ? 1 : 0);
+}
+
+function sanitizeSwarmDefaults(defaults: SwarmDefaults): SwarmDefaults {
+  const normalized: SwarmDefaults = {};
+  if (typeof defaults.maxAgents === 'number') {
+    normalized.maxAgents = Math.max(1, Math.min(10, Math.floor(defaults.maxAgents)));
+  }
+  if (defaults.budget) {
+    const budget: NonNullable<SwarmDefaults['budget']> = {};
+    if (typeof defaults.budget.maxEstimatedTokens === 'number') {
+      budget.maxEstimatedTokens = Math.max(1, Math.floor(defaults.budget.maxEstimatedTokens));
+    }
+    if (typeof defaults.budget.maxWallMs === 'number') {
+      budget.maxWallMs = Math.max(1, Math.floor(defaults.budget.maxWallMs));
+    }
+    if (Object.keys(budget).length > 0) {
+      normalized.budget = budget;
+    }
+  }
+  return normalized;
+}
+
+export function getSwarmDefaults(): SwarmDefaults {
+  const parsed = safeParseJsonWithFallback<SwarmDefaults>(getRow().swarm_defaults, {}) ?? {};
+  return sanitizeSwarmDefaults(parsed);
+}
+
+export function setSwarmDefaults(defaults: SwarmDefaults): void {
+  const db = getDatabase();
+  const normalized = sanitizeSwarmDefaults(defaults);
+  db.prepare('UPDATE app_settings SET swarm_defaults = ? WHERE id = 1').run(
+    JSON.stringify(normalized),
+  );
+}
+
 export function getAppSettings(): AppSettings {
   const row = getRow();
   return {
@@ -209,6 +255,10 @@ export function getAppSettings(): AppSettings {
       : 'system',
     userName: row.user_name || '',
     systemInstructions: row.system_instructions || '',
+    swarmEnabled: row.swarm_enabled === 1,
+    swarmDefaults: sanitizeSwarmDefaults(
+      safeParseJsonWithFallback<SwarmDefaults>(row.swarm_defaults, {}) ?? {},
+    ),
   };
 }
 
@@ -226,7 +276,9 @@ export function clearAppSettings(): void {
       openai_base_url = '',
       theme = 'system',
       user_name = '',
-      system_instructions = ''
+      system_instructions = '',
+      swarm_enabled = 0,
+      swarm_defaults = '{}'
     WHERE id = 1`,
   ).run();
 }

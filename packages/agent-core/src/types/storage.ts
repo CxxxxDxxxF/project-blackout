@@ -56,6 +56,16 @@ export interface AppSettings {
   theme: ThemePreference;
   userName: string;
   systemInstructions: string;
+  swarmEnabled: boolean;
+  swarmDefaults: SwarmDefaults;
+}
+
+export interface SwarmDefaults {
+  maxAgents?: number;
+  budget?: {
+    maxEstimatedTokens?: number;
+    maxWallMs?: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +146,14 @@ export interface AppSettingsAPI {
   getSystemInstructions(): string;
   /** Set custom system instructions */
   setSystemInstructions(systemInstructions: string): void;
+  /** Get global swarm feature toggle */
+  getSwarmEnabled(): boolean;
+  /** Set global swarm feature toggle */
+  setSwarmEnabled(enabled: boolean): void;
+  /** Get default swarm configuration values */
+  getSwarmDefaults(): SwarmDefaults;
+  /** Set default swarm configuration values */
+  setSwarmDefaults(defaults: SwarmDefaults): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */

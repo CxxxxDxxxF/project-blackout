@@ -48,6 +48,8 @@ const mockAccomplish = {
   setSystemInstructions: vi.fn().mockResolvedValue(undefined),
   getSoulMarkdown: vi.fn().mockResolvedValue(''),
   setSoulMarkdown: vi.fn().mockResolvedValue(undefined),
+  getSwarmSettings: vi.fn().mockResolvedValue({ enabled: false, defaults: { maxAgents: 3 } }),
+  setSwarmSettings: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock the accomplish module

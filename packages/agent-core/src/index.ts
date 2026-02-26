@@ -226,6 +226,23 @@ export { generateTaskSummary } from './services/summarizer.js';
 export type { GetApiKeyFn } from './services/summarizer.js';
 
 // -----------------------------------------------------------------------------
+// Orchestration (Swarm)
+// -----------------------------------------------------------------------------
+export {
+  runSwarmOrchestrator,
+  type SwarmChildPlan,
+  type SwarmRunChildInput,
+  type SwarmRunChildResult,
+  type SwarmOrchestratorOptions,
+  type SwarmOrchestratorResult,
+} from './orchestration/swarm-orchestrator.js';
+export {
+  selectSwarmRoute,
+  type SwarmRole,
+  type SwarmRouteSelection,
+} from './orchestration/swarm-routing.js';
+
+// -----------------------------------------------------------------------------
 // Skills Module (from ./skills/)
 // -----------------------------------------------------------------------------
 
@@ -239,10 +256,13 @@ export type { GetApiKeyFn } from './services/summarizer.js';
 export type {
   TaskStatus,
   TaskConfig,
+  SwarmTaskConfig,
   Task,
   TaskAttachment,
   TaskMessage,
   TaskResult,
+  SwarmChildStatus,
+  SwarmChildSummary,
   TaskProgress,
   TaskUpdateEvent,
 } from './common/types/task.js';

@@ -95,6 +95,20 @@ const accomplishAPI = {
   },
   getAppSettings: (): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }> =>
     ipcRenderer.invoke('settings:app-settings'),
+  getSwarmSettings: (): Promise<{
+    enabled: boolean;
+    defaults?: {
+      maxAgents?: number;
+      budget?: { maxEstimatedTokens?: number; maxWallMs?: number };
+    };
+  }> => ipcRenderer.invoke('settings:swarm:get'),
+  setSwarmSettings: (payload: {
+    enabled?: boolean;
+    defaults?: {
+      maxAgents?: number;
+      budget?: { maxEstimatedTokens?: number; maxWallMs?: number };
+    };
+  }): Promise<void> => ipcRenderer.invoke('settings:swarm:set', payload),
   getUserName: (): Promise<string> => ipcRenderer.invoke('settings:user-name:get'),
   setUserName: (userName: string): Promise<void> =>
     ipcRenderer.invoke('settings:user-name:set', userName),

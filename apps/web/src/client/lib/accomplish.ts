@@ -108,6 +108,20 @@ interface AccomplishAPI {
   setTheme(theme: string): Promise<void>;
   onThemeChange?(callback: (data: { theme: string; resolved: string }) => void): () => void;
   getAppSettings(): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }>;
+  getSwarmSettings(): Promise<{
+    enabled: boolean;
+    defaults?: {
+      maxAgents?: number;
+      budget?: { maxEstimatedTokens?: number; maxWallMs?: number };
+    };
+  }>;
+  setSwarmSettings(payload: {
+    enabled?: boolean;
+    defaults?: {
+      maxAgents?: number;
+      budget?: { maxEstimatedTokens?: number; maxWallMs?: number };
+    };
+  }): Promise<void>;
   getUserName(): Promise<string>;
   setUserName(userName: string): Promise<void>;
   getSystemInstructions(): Promise<string>;

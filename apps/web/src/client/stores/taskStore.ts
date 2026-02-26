@@ -10,6 +10,7 @@ import {
   type PermissionResponse,
   type TaskMessage,
   type TodoItem,
+  type SwarmChildSummary,
 } from '@accomplish_ai/agent-core/common';
 import { getAccomplish } from '../lib/accomplish';
 
@@ -53,6 +54,7 @@ interface TaskState {
   todos: TodoItem[];
   todosTaskId: string | null;
   authError: { providerId: string; message: string } | null;
+  swarmChildrenByTask: Record<string, SwarmChildSummary[]>;
   isLauncherOpen: boolean;
   launcherInitialPrompt: string | null;
   openLauncher: () => void;
@@ -86,6 +88,7 @@ interface TaskState {
   clearTodos: () => void;
   setAuthError: (error: { providerId: string; message: string }) => void;
   clearAuthError: () => void;
+  getSwarmChildrenForTask: (taskId: string) => SwarmChildSummary[];
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -102,6 +105,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   todos: [],
   todosTaskId: null,
   authError: null,
+  swarmChildrenByTask: {},
   isLauncherOpen: false,
   launcherInitialPrompt: null,
 
@@ -345,6 +349,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       let updatedTasks = state.tasks;
       let newStatus: TaskStatus | null = null;
 
+      if (event.type === 'swarm-child-update' && event.swarmChild) {
+        const incomingChild = event.swarmChild;
+        const existing = state.swarmChildrenByTask[event.taskId] || [];
+        const updatedList = existing.some((item) => item.childId === incomingChild.childId)
+          ? existing.map((item) => (item.childId === incomingChild.childId ? incomingChild : item))
+          : [...existing, incomingChild];
+        return {
+          swarmChildrenByTask: {
+            ...state.swarmChildrenByTask,
+            [event.taskId]: updatedList,
+          },
+        };
+      }
+
       if (event.type === 'message' && event.message && isCurrentTask && state.currentTask) {
         updatedCurrentTask = {
           ...state.currentTask,
@@ -414,6 +432,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         tasks: updatedTasks,
         isLoading: false,
         ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
+        ...(event.type === 'complete' && event.result?.swarmChildren
+          ? {
+              swarmChildrenByTask: {
+                ...state.swarmChildrenByTask,
+                [event.taskId]: event.result.swarmChildren,
+              },
+            }
+          : {}),
       };
     });
   },
@@ -514,6 +540,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       todosTaskId: null,
       authError: null,
       isLauncherOpen: false,
+      swarmChildrenByTask: {},
     });
   },
 
@@ -531,6 +558,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   clearAuthError: () => {
     set({ authError: null });
+  },
+
+  getSwarmChildrenForTask: (taskId: string) => {
+    return get().swarmChildrenByTask[taskId] || [];
   },
 
   openLauncher: () => set({ isLauncherOpen: true, launcherInitialPrompt: null }),

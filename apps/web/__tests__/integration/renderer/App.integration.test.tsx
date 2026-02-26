@@ -57,6 +57,8 @@ const mockAccomplish = {
   validateApiKeyForProvider: vi.fn().mockResolvedValue({ valid: true }),
   validateBedrockCredentials: vi.fn().mockResolvedValue({ valid: true }),
   saveBedrockCredentials: vi.fn().mockResolvedValue(undefined),
+  getSwarmSettings: vi.fn().mockResolvedValue({ enabled: false, defaults: { maxAgents: 3 } }),
+  setSwarmSettings: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock the accomplish module - always return true for isRunningInElectron for most tests
