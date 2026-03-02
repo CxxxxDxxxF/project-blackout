@@ -91,4 +91,41 @@ describe('task-callbacks', () => {
     expect(sender.send).toHaveBeenCalledTimes(1);
     expect(mockStorage.addTaskMessage).toHaveBeenCalledTimes(2);
   });
+
+  it('budgets oversized batched renderer payloads while persisting bounded history', () => {
+    const now = new Date().toISOString();
+    const window = {
+      isDestroyed: vi.fn(() => false),
+    } as unknown as BrowserWindow;
+    const sender = {
+      isDestroyed: vi.fn(() => false),
+      send: vi.fn(),
+    } as unknown as WebContents;
+
+    const callbacks = createTaskCallbacks({
+      taskId: 'task-1',
+      window,
+      sender,
+    });
+
+    const messages: TaskMessage[] = Array.from({ length: 30 }).map((_, idx) => ({
+      id: `msg-${idx}`,
+      type: 'assistant',
+      content: 'x'.repeat(12000),
+      timestamp: now,
+    }));
+
+    callbacks.onBatchedMessages(messages);
+
+    expect(sender.send).toHaveBeenCalledTimes(1);
+    const payload = (sender.send as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0][1] as {
+      taskId: string;
+      messages: TaskMessage[];
+    };
+    expect(payload.messages.length).toBeGreaterThan(0);
+    expect(payload.messages.length).toBeLessThanOrEqual(20);
+    expect(payload.messages[0]?.content).toContain('...[truncated');
+    expect(mockStorage.addTaskMessage).toHaveBeenCalledTimes(20);
+  });
 });

@@ -4,6 +4,10 @@ import { useLocalSetupFlow } from '@/components/settings/hooks/useLocalSetupFlow
 
 const mockAccomplish = {
   getLocalSetupStatus: vi.fn(),
+  getLocalHealthReport: vi.fn(),
+  getLocalRecentErrors: vi.fn(),
+  clearLocalRecentErrors: vi.fn(),
+  exportLocalDiagnostics: vi.fn(),
   llmfitCheck: vi.fn(),
   llmfitScan: vi.fn(),
   testOllamaConnection: vi.fn(),
@@ -11,6 +15,7 @@ const mockAccomplish = {
   ollamaListModels: vi.fn(),
   ollamaPullModel: vi.fn(),
   airllmStart: vi.fn(),
+  airllmInstallDependencies: vi.fn(),
   airllmLoadModel: vi.fn(),
   airllmServerUrl: vi.fn(),
 };
@@ -28,6 +33,18 @@ describe('useLocalSetupFlow', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'ollama' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'ready',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://localhost:11434', modelCount: 1 },
+      airllm: { running: false, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: { activeEngine: 'ollama', stale: false },
+      issues: [],
+    });
+    mockAccomplish.getLocalRecentErrors.mockResolvedValue([]);
+    mockAccomplish.clearLocalRecentErrors.mockResolvedValue(undefined);
+    mockAccomplish.exportLocalDiagnostics.mockResolvedValue({ blob: '{"ok":true}' });
     mockAccomplish.llmfitCheck.mockResolvedValue({ installed: true, version: '1.0.0' });
     mockAccomplish.llmfitScan.mockResolvedValue({
       success: true,
@@ -44,6 +61,7 @@ describe('useLocalSetupFlow', () => {
     mockAccomplish.ollamaPullModel.mockResolvedValue({ success: true });
     mockAccomplish.setOllamaConfig.mockResolvedValue(undefined);
     mockAccomplish.airllmStart.mockResolvedValue({ success: true });
+    mockAccomplish.airllmInstallDependencies.mockResolvedValue({ success: true });
     mockAccomplish.airllmLoadModel.mockResolvedValue({ success: true });
     mockAccomplish.airllmServerUrl.mockResolvedValue({ url: 'http://127.0.0.1:11435' });
   });
@@ -84,6 +102,20 @@ describe('useLocalSetupFlow', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'ollama' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'degraded',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://localhost:11434', modelCount: 0 },
+      airllm: { running: false, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: { activeEngine: 'ollama', stale: false },
+      issues: ['OLLAMA_NO_MODELS'],
+    });
+    mockAccomplish.ollamaListModels.mockResolvedValueOnce({ success: true, models: [] });
+    mockAccomplish.ollamaListModels.mockResolvedValueOnce({
+      success: true,
+      models: [{ name: 'llama3.2:3b', model: 'llama3.2:3b', size: 1, digest: 'x', modifiedAt: '' }],
+    });
 
     const { result } = renderHook(() =>
       useLocalSetupFlow({
@@ -103,5 +135,27 @@ describe('useLocalSetupFlow', () => {
     expect(onConnect).toHaveBeenCalled();
     expect(mockAccomplish.ollamaPullModel).toHaveBeenCalled();
     expect(onModelChange).toHaveBeenCalledWith('ollama/llama3.2:3b');
+  });
+
+  it('clears recent local errors via diagnostics action', async () => {
+    const onConnect = vi.fn();
+    const onModelChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useLocalSetupFlow({
+        serverUrl: 'http://localhost:11434',
+        connectedProvider: undefined,
+        onConnect,
+        onModelChange,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.clearRecentErrors();
+    });
+
+    expect(mockAccomplish.clearLocalRecentErrors).toHaveBeenCalled();
   });
 });

@@ -209,6 +209,45 @@
       "switchToOllama": "切换到 Ollama localhost",
       "keepAirllm": "继续使用 AirLLM"
     },
+    "health": {
+      "title": "本地健康状态",
+      "routingStale": "本地路由状态已过期，需要修复。",
+      "categories": {
+        "ready": "就绪",
+        "degraded": "降级",
+        "blocked": "阻塞",
+        "recovering": "恢复中"
+      },
+      "actions": {
+        "installAirllmDeps": "安装 AirLLM 依赖",
+        "switchToOllama": "切换到 Ollama",
+        "fastSetupModel": "安装推荐模型",
+        "refresh": "重新检查"
+      }
+    },
+    "errorCodes": {
+      "AIRLLM_DEPS_MISSING": "AirLLM 缺少依赖。",
+      "AIRLLM_SERVER_UNREACHABLE": "AirLLM 服务不可达。",
+      "AIRLLM_MODEL_LOAD_FAILED": "AirLLM 模型加载失败。",
+      "OLLAMA_UNREACHABLE": "无法连接到 Ollama。",
+      "OLLAMA_WRONG_ENDPOINT": "配置的 Ollama URL 不是有效的 Ollama 端点。",
+      "OLLAMA_NO_MODELS": "未安装可运行的 Ollama 模型。",
+      "FITLLM_UNAVAILABLE": "FitLLM 不可用（已启用兜底推荐）。"
+    },
+    "diagnostics": {
+      "title": "诊断",
+      "subtitle": "最近的本地可靠性信号与导出工具。",
+      "clearErrors": "清除错误",
+      "export": "导出诊断",
+      "exporting": "导出中...",
+      "exported": "诊断已导出：{{target}}",
+      "healthStatus": "当前本地健康状态",
+      "unavailable": "不可用",
+      "routing": "路由：{{engine}} via {{endpoint}}",
+      "recentErrors": "最近的本地错误",
+      "noErrors": "最近没有本地设置错误。",
+      "actionContext": "操作：{{action}}"
+    },
     "sources": {
       "fitllm": "FitLLM 推荐",
       "fallback": "兜底推荐"

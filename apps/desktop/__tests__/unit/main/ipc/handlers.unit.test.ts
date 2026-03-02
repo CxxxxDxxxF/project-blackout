@@ -77,6 +77,7 @@ vi.mock('electron', () => {
     app: {
       isPackaged: false,
       getPath: vi.fn(() => '/tmp/test-app'),
+      getVersion: vi.fn(() => '0.0.0-test'),
     },
   };
 });
@@ -484,6 +485,13 @@ describe('IPC Handlers Integration', () => {
 
       // Log handler
       expect(handlers.has('log:event')).toBe(true);
+
+      // Local reliability handlers
+      expect(handlers.has('local:setup-status')).toBe(true);
+      expect(handlers.has('local:health-report')).toBe(true);
+      expect(handlers.has('local:get-recent-errors')).toBe(true);
+      expect(handlers.has('local:clear-recent-errors')).toBe(true);
+      expect(handlers.has('local:export-diagnostics')).toBe(true);
     });
   });
 

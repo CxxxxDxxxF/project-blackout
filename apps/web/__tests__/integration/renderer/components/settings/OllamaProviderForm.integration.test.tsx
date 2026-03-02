@@ -10,6 +10,10 @@ import type { ConnectedProvider } from '@accomplish_ai/agent-core/common';
 
 const mockAccomplish = {
   getLocalSetupStatus: vi.fn(),
+  getLocalHealthReport: vi.fn(),
+  getLocalRecentErrors: vi.fn(),
+  clearLocalRecentErrors: vi.fn(),
+  exportLocalDiagnostics: vi.fn(),
   llmfitCheck: vi.fn(),
   llmfitScan: vi.fn(),
   testOllamaConnection: vi.fn(),
@@ -17,6 +21,7 @@ const mockAccomplish = {
   ollamaListModels: vi.fn(),
   ollamaPullModel: vi.fn(),
   airllmStart: vi.fn(),
+  airllmInstallDependencies: vi.fn(),
   airllmLoadModel: vi.fn(),
   airllmServerUrl: vi.fn(),
 };
@@ -30,16 +35,16 @@ describe('OllamaProviderForm Integration', () => {
   const onDisconnect = vi.fn();
   const onModelChange = vi.fn();
 
-  const baseConnectedProvider: ConnectedProvider = {
+  const connectedWithoutModels: ConnectedProvider = {
     providerId: 'ollama',
     connectionStatus: 'connected',
-    selectedModelId: 'ollama/llama3.2:3b',
+    selectedModelId: null,
     credentials: {
       type: 'ollama',
       serverUrl: 'http://localhost:11434',
     },
     lastConnectedAt: new Date().toISOString(),
-    availableModels: [{ id: 'ollama/llama3.2:3b', name: 'llama3.2:3b', toolSupport: 'unknown' }],
+    availableModels: [],
   };
 
   beforeEach(() => {
@@ -50,6 +55,18 @@ describe('OllamaProviderForm Integration', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'ollama' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'ready',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://localhost:11434', modelCount: 1 },
+      airllm: { running: false, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: { activeEngine: 'ollama', stale: false },
+      issues: [],
+    });
+    mockAccomplish.getLocalRecentErrors.mockResolvedValue([]);
+    mockAccomplish.clearLocalRecentErrors.mockResolvedValue(undefined);
+    mockAccomplish.exportLocalDiagnostics.mockResolvedValue({ blob: '{}' });
     mockAccomplish.llmfitCheck.mockResolvedValue({ installed: true, version: '1.0.0' });
     mockAccomplish.llmfitScan.mockResolvedValue({
       success: true,
@@ -72,6 +89,7 @@ describe('OllamaProviderForm Integration', () => {
     mockAccomplish.ollamaListModels.mockResolvedValue({ success: true, models: [] });
     mockAccomplish.ollamaPullModel.mockResolvedValue({ success: true });
     mockAccomplish.airllmStart.mockResolvedValue({ success: true });
+    mockAccomplish.airllmInstallDependencies.mockResolvedValue({ success: true });
     mockAccomplish.airllmLoadModel.mockResolvedValue({ success: true });
     mockAccomplish.airllmServerUrl.mockResolvedValue({ url: 'http://127.0.0.1:11435' });
   });
@@ -116,7 +134,32 @@ describe('OllamaProviderForm Integration', () => {
 
     render(
       <OllamaProviderForm
-        connectedProvider={baseConnectedProvider}
+        connectedProvider={connectedWithoutModels}
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
+        onModelChange={onModelChange}
+        showModelError={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Recommended Models')).toBeInTheDocument();
+      expect(screen.getByText('Install to Ollama')).toBeInTheDocument();
+      expect(screen.getByText('Load with AirLLM')).toBeInTheDocument();
+    });
+  });
+
+  it('shows guided recommendations when setup-status model count is stale but selector has no models', async () => {
+    mockAccomplish.getLocalSetupStatus.mockResolvedValue({
+      ollama: { reachable: true, baseUrl: 'http://localhost:11434', modelCount: 3 },
+      airllm: { running: false, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: { activeEngine: 'ollama' },
+    });
+
+    render(
+      <OllamaProviderForm
+        connectedProvider={connectedWithoutModels}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onModelChange={onModelChange}
@@ -142,10 +185,26 @@ describe('OllamaProviderForm Integration', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'airllm' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'degraded',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://127.0.0.1:11435', modelCount: 0 },
+      airllm: {
+        running: true,
+        serverUrl: 'http://127.0.0.1:11435',
+        modelId: 'meta-llama/Llama-3.2-1B',
+      },
+      llmfit: { installed: true },
+      routing: {
+        activeEngine: 'airllm',
+        stale: false,
+      },
+      issues: ['OLLAMA_NO_MODELS'],
+    });
 
     render(
       <OllamaProviderForm
-        connectedProvider={baseConnectedProvider}
+        connectedProvider={connectedWithoutModels}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onModelChange={onModelChange}
@@ -169,10 +228,22 @@ describe('OllamaProviderForm Integration', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'airllm' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'degraded',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://127.0.0.1:11435', modelCount: 0 },
+      airllm: { running: true, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: {
+        activeEngine: 'airllm',
+        stale: false,
+      },
+      issues: ['OLLAMA_NO_MODELS'],
+    });
 
     render(
       <OllamaProviderForm
-        connectedProvider={baseConnectedProvider}
+        connectedProvider={connectedWithoutModels}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onModelChange={onModelChange}
@@ -208,7 +279,7 @@ describe('OllamaProviderForm Integration', () => {
 
     render(
       <OllamaProviderForm
-        connectedProvider={baseConnectedProvider}
+        connectedProvider={connectedWithoutModels}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onModelChange={onModelChange}
@@ -233,6 +304,18 @@ describe('OllamaProviderForm Integration', () => {
       llmfit: { installed: true },
       routing: { activeEngine: 'ollama' },
     });
+    mockAccomplish.getLocalHealthReport.mockResolvedValue({
+      status: 'degraded',
+      checkedAt: new Date().toISOString(),
+      ollama: { reachable: true, baseUrl: 'http://localhost:11434', modelCount: 0 },
+      airllm: { running: false, serverUrl: 'http://127.0.0.1:11435', modelId: null },
+      llmfit: { installed: true },
+      routing: {
+        activeEngine: 'ollama',
+        stale: false,
+      },
+      issues: ['OLLAMA_NO_MODELS'],
+    });
     mockAccomplish.llmfitScan.mockResolvedValue({
       success: true,
       models: [
@@ -250,7 +333,11 @@ describe('OllamaProviderForm Integration', () => {
       ],
     });
     mockAccomplish.testOllamaConnection.mockResolvedValue({ success: true, models: [] });
-    mockAccomplish.ollamaListModels.mockResolvedValue({
+    mockAccomplish.ollamaListModels.mockResolvedValueOnce({
+      success: true,
+      models: [],
+    });
+    mockAccomplish.ollamaListModels.mockResolvedValueOnce({
       success: true,
       models: [{ name: 'llama3.2:3b' }],
     });

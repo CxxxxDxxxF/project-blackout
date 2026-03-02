@@ -209,6 +209,45 @@
       "switchToOllama": "Switch to Ollama localhost",
       "keepAirllm": "Keep AirLLM"
     },
+    "health": {
+      "title": "Local Health",
+      "routingStale": "Local routing is stale and needs remediation.",
+      "categories": {
+        "ready": "Ready",
+        "degraded": "Degraded",
+        "blocked": "Blocked",
+        "recovering": "Recovering"
+      },
+      "actions": {
+        "installAirllmDeps": "Install AirLLM dependencies",
+        "switchToOllama": "Switch to Ollama",
+        "fastSetupModel": "Install recommended model",
+        "refresh": "Recheck health"
+      }
+    },
+    "errorCodes": {
+      "AIRLLM_DEPS_MISSING": "AirLLM dependencies are missing.",
+      "AIRLLM_SERVER_UNREACHABLE": "AirLLM server is unreachable.",
+      "AIRLLM_MODEL_LOAD_FAILED": "AirLLM model load failed.",
+      "OLLAMA_UNREACHABLE": "Ollama is unreachable.",
+      "OLLAMA_WRONG_ENDPOINT": "Configured Ollama URL is not an Ollama endpoint.",
+      "OLLAMA_NO_MODELS": "No runnable Ollama models are installed.",
+      "FITLLM_UNAVAILABLE": "FitLLM is unavailable (fallback recommendations are active)."
+    },
+    "diagnostics": {
+      "title": "Diagnostics",
+      "subtitle": "Recent local reliability signals and export tools.",
+      "clearErrors": "Clear errors",
+      "export": "Export diagnostics",
+      "exporting": "Exporting...",
+      "exported": "Diagnostics exported: {{target}}",
+      "healthStatus": "Current local health",
+      "unavailable": "Unavailable",
+      "routing": "Routing: {{engine}} via {{endpoint}}",
+      "recentErrors": "Recent local errors",
+      "noErrors": "No recent local setup errors.",
+      "actionContext": "Action: {{action}}"
+    },
     "sources": {
       "fitllm": "FitLLM recommendation",
       "fallback": "Fallback recommendation"

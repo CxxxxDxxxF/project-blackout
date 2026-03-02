@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { spawn } from 'node:child_process';
-import { ipcMain, BrowserWindow, shell, dialog, nativeTheme } from 'electron';
+import { ipcMain, BrowserWindow, shell, dialog, nativeTheme, app } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { URL, fileURLToPath } from 'url';
 import fs from 'fs';
@@ -91,6 +91,11 @@ import type {
   LMStudioConfig,
   SwarmChildSummary,
   SwarmRunChildInput,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthCategory,
+  LocalHealthReport,
+  LocalSetupErrorCode,
   LocalSetupStatus,
 } from '@accomplish_ai/agent-core';
 import {
@@ -112,6 +117,260 @@ import { registerVertexHandlers } from '../providers';
 
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 const CURRENT_FILE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const AIRLLM_SERVER_URL = 'http://127.0.0.1:11435';
+const LOCAL_ERROR_HISTORY_LIMIT = 100;
+const localErrorHistory: LocalErrorRecord[] = [];
+
+function trimLocalErrorHistory(): void {
+  if (localErrorHistory.length <= LOCAL_ERROR_HISTORY_LIMIT) {
+    return;
+  }
+  const overflow = localErrorHistory.length - LOCAL_ERROR_HISTORY_LIMIT;
+  localErrorHistory.splice(0, overflow);
+}
+
+function addLocalError(
+  record: Omit<LocalErrorRecord, 'timestamp'> & { timestamp?: string },
+): LocalErrorRecord {
+  const normalized: LocalErrorRecord = {
+    timestamp: record.timestamp || new Date().toISOString(),
+    code: record.code,
+    message: record.message,
+    action: record.action,
+    recoverable: record.recoverable,
+    context: record.context,
+  };
+  localErrorHistory.push(normalized);
+  trimLocalErrorHistory();
+  return normalized;
+}
+
+function makeLocalActionFailure(params: {
+  code: LocalSetupErrorCode;
+  message: string;
+  action: string;
+  recoverable?: boolean;
+  context?: LocalErrorRecord['context'];
+}): LocalActionResult {
+  const recoverable = params.recoverable ?? true;
+  addLocalError({
+    code: params.code,
+    message: params.message,
+    action: params.action,
+    recoverable,
+    context: params.context,
+  });
+  return {
+    success: false,
+    code: params.code,
+    error: params.message,
+    recoverable,
+  };
+}
+
+function mapAirllmErrorCode(message: string, fallback: LocalSetupErrorCode): LocalSetupErrorCode {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes('airllm package') ||
+    normalized.includes('dependencies are missing') ||
+    normalized.includes('no module named') ||
+    normalized.includes('modulenotfounderror')
+  ) {
+    return 'AIRLLM_DEPS_MISSING';
+  }
+  return fallback;
+}
+
+function mapOllamaErrorCode(message: string): LocalSetupErrorCode {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('does not look like an ollama') || normalized.includes('status 404')) {
+    return 'OLLAMA_WRONG_ENDPOINT';
+  }
+  return 'OLLAMA_UNREACHABLE';
+}
+
+function toDiagnosticsSafeString(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+  return fallback;
+}
+
+async function probeAirllmHealth(): Promise<{
+  reachable: boolean;
+  depsInstalled?: boolean;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${AIRLLM_SERVER_URL}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      return {
+        reachable: false,
+        error: `AirLLM health check failed with status ${res.status}`,
+      };
+    }
+    const payload = (await res.json()) as { airllm_available?: boolean };
+    return {
+      reachable: true,
+      depsInstalled: payload.airllm_available !== false,
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      error: toDiagnosticsSafeString(error, 'Unable to reach AirLLM health endpoint'),
+    };
+  }
+}
+
+async function buildLocalHealthReport(): Promise<LocalHealthReport> {
+  const storage = getStorage();
+  const ollamaBaseUrl = storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
+  const airllmStatus = getAirLLMServer().getStatus();
+  const activeEngine: 'ollama' | 'airllm' =
+    ollamaBaseUrl === AIRLLM_SERVER_URL ? 'airllm' : 'ollama';
+
+  let ollamaReachable = false;
+  let ollamaModelCount = 0;
+  let ollamaError: string | undefined;
+  let ollamaEndpointValid = true;
+
+  try {
+    const tagsResponse = await fetch(`${ollamaBaseUrl.replace(/\/+$/, '')}/api/tags`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (tagsResponse.ok) {
+      ollamaReachable = true;
+      const payload = (await tagsResponse.json()) as { models?: Array<unknown> };
+      ollamaModelCount = payload.models?.length ?? 0;
+    } else {
+      ollamaReachable = false;
+      ollamaEndpointValid = tagsResponse.status !== 404;
+      ollamaError =
+        tagsResponse.status === 404
+          ? `Connected to ${ollamaBaseUrl}, but this does not appear to be an Ollama endpoint.`
+          : `Ollama returned status ${tagsResponse.status}`;
+    }
+  } catch (error) {
+    ollamaReachable = false;
+    ollamaEndpointValid = true;
+    ollamaError = toDiagnosticsSafeString(error, `Cannot reach Ollama at ${ollamaBaseUrl}`);
+  }
+
+  let llmfitInstalled = false;
+  let llmfitError: string | undefined;
+  try {
+    const llmfit = await checkLlmfitInstalled();
+    llmfitInstalled = llmfit.installed;
+  } catch (error) {
+    llmfitInstalled = false;
+    llmfitError = toDiagnosticsSafeString(error, 'Unable to verify FitLLM installation');
+  }
+
+  const airllmHealth = await probeAirllmHealth();
+  const airllmRunning = airllmStatus.running;
+  const airllmDepsInstalled = airllmRunning ? airllmHealth.depsInstalled : undefined;
+  const airllmError = airllmRunning && !airllmHealth.reachable ? airllmHealth.error : undefined;
+
+  const routingStale =
+    activeEngine === 'airllm' &&
+    (!airllmRunning || !airllmHealth.reachable || airllmDepsInstalled === false);
+  const routingReason = routingStale
+    ? !airllmRunning
+      ? 'AirLLM routing selected but server is not running'
+      : airllmDepsInstalled === false
+        ? 'AirLLM dependencies are missing'
+        : 'AirLLM routing selected but server is unreachable'
+    : undefined;
+
+  const issueSet = new Set<LocalSetupErrorCode>();
+  if (!ollamaReachable) {
+    issueSet.add(ollamaEndpointValid ? 'OLLAMA_UNREACHABLE' : 'OLLAMA_WRONG_ENDPOINT');
+  } else if (ollamaModelCount === 0) {
+    issueSet.add('OLLAMA_NO_MODELS');
+  }
+  if (airllmRunning && airllmDepsInstalled === false) {
+    issueSet.add('AIRLLM_DEPS_MISSING');
+  }
+  if (activeEngine === 'airllm' && (!airllmRunning || !airllmHealth.reachable)) {
+    issueSet.add('AIRLLM_SERVER_UNREACHABLE');
+  }
+  if (!llmfitInstalled) {
+    issueSet.add('FITLLM_UNAVAILABLE');
+  }
+
+  const ollamaReady = ollamaReachable && ollamaModelCount > 0;
+  const airllmReady =
+    airllmRunning &&
+    airllmHealth.reachable &&
+    airllmDepsInstalled !== false &&
+    Boolean(airllmStatus.modelId);
+  const activeEngineReady = activeEngine === 'ollama' ? ollamaReady : airllmReady;
+
+  let status: LocalHealthCategory = 'ready';
+  if (!ollamaReachable && !airllmRunning) {
+    status = 'blocked';
+  } else if (airllmRunning && airllmDepsInstalled === false) {
+    status = 'recovering';
+  } else if (routingStale || !activeEngineReady) {
+    status = 'degraded';
+  }
+
+  return {
+    status,
+    checkedAt: new Date().toISOString(),
+    ollama: {
+      reachable: ollamaReachable,
+      baseUrl: ollamaBaseUrl,
+      modelCount: ollamaModelCount,
+      error: ollamaError,
+      endpointValid: ollamaEndpointValid,
+    },
+    airllm: {
+      running: airllmRunning,
+      serverUrl: AIRLLM_SERVER_URL,
+      depsInstalled: airllmDepsInstalled,
+      modelId: airllmStatus.modelId ?? null,
+      error: airllmError,
+    },
+    llmfit: {
+      installed: llmfitInstalled,
+      error: llmfitError,
+    },
+    routing: {
+      activeEngine,
+      stale: routingStale,
+      reason: routingReason,
+    },
+    issues: Array.from(issueSet),
+  };
+}
+
+function toLocalSetupStatus(report: LocalHealthReport): LocalSetupStatus {
+  return {
+    ollama: {
+      reachable: report.ollama.reachable,
+      baseUrl: report.ollama.baseUrl,
+      modelCount: report.ollama.modelCount,
+      error: report.ollama.error,
+    },
+    airllm: {
+      running: report.airllm.running,
+      serverUrl: report.airllm.serverUrl,
+      modelId: report.airllm.modelId ?? null,
+    },
+    llmfit: {
+      installed: report.llmfit.installed,
+    },
+    routing: {
+      activeEngine: report.routing.activeEngine,
+    },
+  };
+}
 
 function canAutoStartOllama(url: string): boolean {
   try {
@@ -1018,54 +1277,49 @@ export function registerIPCHandlers(): void {
   });
 
   handle('local:setup-status', async (_event: IpcMainInvokeEvent): Promise<LocalSetupStatus> => {
-    const ollamaBaseUrl = storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
-    const airllmServerUrl = 'http://127.0.0.1:11435';
-    const airllmStatus = getAirLLMServer().getStatus();
-    const llmfit = await checkLlmfitInstalled();
-
-    let ollamaReachable = false;
-    let modelCount = 0;
-    let ollamaError: string | undefined;
-
-    try {
-      ollamaReachable = await isOllamaReachable(ollamaBaseUrl);
-      if (ollamaReachable) {
-        const res = await fetch(`${ollamaBaseUrl.replace(/\/+$/, '')}/api/tags`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (res.ok) {
-          const payload = (await res.json()) as { models?: Array<unknown> };
-          modelCount = payload.models?.length ?? 0;
-        } else {
-          ollamaError = `Ollama returned status ${res.status}`;
-        }
-      } else {
-        ollamaError = `Cannot reach Ollama at ${ollamaBaseUrl}`;
-      }
-    } catch (err) {
-      ollamaError = err instanceof Error ? err.message : 'Failed to check Ollama status';
-    }
-
-    return {
-      ollama: {
-        reachable: ollamaReachable,
-        baseUrl: ollamaBaseUrl,
-        modelCount,
-        error: ollamaError,
-      },
-      airllm: {
-        running: airllmStatus.running,
-        serverUrl: airllmServerUrl,
-        modelId: airllmStatus.modelId ?? null,
-      },
-      llmfit: {
-        installed: llmfit.installed,
-      },
-      routing: {
-        activeEngine: ollamaBaseUrl === airllmServerUrl ? 'airllm' : 'ollama',
-      },
-    };
+    const report = await buildLocalHealthReport();
+    return toLocalSetupStatus(report);
   });
+
+  handle('local:health-report', async (_event: IpcMainInvokeEvent): Promise<LocalHealthReport> => {
+    return buildLocalHealthReport();
+  });
+
+  handle(
+    'local:get-recent-errors',
+    async (_event: IpcMainInvokeEvent): Promise<LocalErrorRecord[]> => {
+      return [...localErrorHistory].reverse();
+    },
+  );
+
+  handle('local:clear-recent-errors', async (_event: IpcMainInvokeEvent): Promise<void> => {
+    localErrorHistory.length = 0;
+  });
+
+  handle(
+    'local:export-diagnostics',
+    async (
+      _event: IpcMainInvokeEvent,
+    ): Promise<{
+      path?: string;
+      blob?: string;
+    }> => {
+      const health = await buildLocalHealthReport();
+      const settings = storage.getOllamaConfig();
+      const diagnostics = {
+        exportedAt: new Date().toISOString(),
+        appVersion: app.getVersion(),
+        platform: process.platform,
+        health,
+        routing: {
+          activeEngine: health.routing.activeEngine,
+          endpoint: settings?.baseUrl || 'http://localhost:11434',
+        },
+        recentErrors: [...localErrorHistory].reverse(),
+      };
+      return { blob: JSON.stringify(diagnostics, null, 2) };
+    },
+  );
 
   handle('bedrock:save', async (_event: IpcMainInvokeEvent, credentials: string) => {
     const parsed = JSON.parse(credentials);
@@ -1205,26 +1459,41 @@ export function registerIPCHandlers(): void {
     async (
       _event: IpcMainInvokeEvent,
       baseUrl?: string,
-    ): Promise<{
-      success: boolean;
-      models?: Array<{
-        name: string;
-        model: string;
-        size: number;
-        digest: string;
-        modifiedAt: string;
-      }>;
-      error?: string;
-    }> => {
+    ): Promise<
+      LocalActionResult & {
+        models?: Array<{
+          name: string;
+          model: string;
+          size: number;
+          digest: string;
+          modifiedAt: string;
+        }>;
+      }
+    > => {
       const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
       const ensured = await ensureOllamaRunning(url);
       if (!ensured.ok) {
-        return { success: false, error: ensured.error };
+        const message = ensured.error || `Cannot reach Ollama at ${url}`;
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:list-models',
+          context: { url },
+        });
       }
       try {
         const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) {
-          return { success: false, error: `Ollama returned status ${res.status}` };
+          const message =
+            res.status === 404
+              ? `Connected to ${url}, but this does not appear to be an Ollama endpoint.`
+              : `Ollama returned status ${res.status}`;
+          return makeLocalActionFailure({
+            code: res.status === 404 ? 'OLLAMA_WRONG_ENDPOINT' : 'OLLAMA_UNREACHABLE',
+            message,
+            action: 'ollama:list-models',
+            context: { status: res.status, url },
+          });
         }
         const data = (await res.json()) as {
           models?: Array<{
@@ -1244,7 +1513,13 @@ export function registerIPCHandlers(): void {
         }));
         return { success: true, models };
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Failed to connect' };
+        const message = toDiagnosticsSafeString(err, 'Failed to connect');
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:list-models',
+          context: { url },
+        });
       }
     },
   );
@@ -1255,14 +1530,17 @@ export function registerIPCHandlers(): void {
       event: IpcMainInvokeEvent,
       modelName: string,
       baseUrl?: string,
-    ): Promise<{
-      success: boolean;
-      error?: string;
-    }> => {
+    ): Promise<LocalActionResult> => {
       const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
       const ensured = await ensureOllamaRunning(url);
       if (!ensured.ok) {
-        return { success: false, error: ensured.error };
+        const message = ensured.error || `Cannot reach Ollama at ${url}`;
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:pull-model',
+          context: { modelName, url },
+        });
       }
       try {
         const res = await fetch(`${url}/api/pull`, {
@@ -1272,11 +1550,25 @@ export function registerIPCHandlers(): void {
           signal: AbortSignal.timeout(3600000), // 1 hour for large models
         });
         if (!res.ok) {
-          return { success: false, error: `Ollama returned status ${res.status}` };
+          const message =
+            res.status === 404
+              ? `Connected to ${url}, but this does not appear to be an Ollama endpoint.`
+              : `Ollama returned status ${res.status}`;
+          return makeLocalActionFailure({
+            code: res.status === 404 ? 'OLLAMA_WRONG_ENDPOINT' : 'OLLAMA_UNREACHABLE',
+            message,
+            action: 'ollama:pull-model',
+            context: { modelName, status: res.status, url },
+          });
         }
         const reader = res.body?.getReader();
         if (!reader) {
-          return { success: false, error: 'No response body' };
+          return makeLocalActionFailure({
+            code: 'OLLAMA_UNREACHABLE',
+            message: 'No response body',
+            action: 'ollama:pull-model',
+            context: { modelName, url },
+          });
         }
         const decoder = new TextDecoder();
         let buffer = '';
@@ -1296,7 +1588,12 @@ export function registerIPCHandlers(): void {
                 error?: string;
               };
               if (msg.error) {
-                return { success: false, error: msg.error };
+                return makeLocalActionFailure({
+                  code: mapOllamaErrorCode(msg.error),
+                  message: msg.error,
+                  action: 'ollama:pull-model',
+                  context: { modelName, url },
+                });
               }
               event.sender.send('ollama:pull-progress', {
                 model: modelName,
@@ -1311,7 +1608,13 @@ export function registerIPCHandlers(): void {
         }
         return { success: true };
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Pull failed' };
+        const message = toDiagnosticsSafeString(err, 'Pull failed');
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:pull-model',
+          context: { modelName, url },
+        });
       }
     },
   );
@@ -1322,14 +1625,17 @@ export function registerIPCHandlers(): void {
       _event: IpcMainInvokeEvent,
       modelName: string,
       baseUrl?: string,
-    ): Promise<{
-      success: boolean;
-      error?: string;
-    }> => {
+    ): Promise<LocalActionResult> => {
       const url = baseUrl || storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
       const ensured = await ensureOllamaRunning(url);
       if (!ensured.ok) {
-        return { success: false, error: ensured.error };
+        const message = ensured.error || `Cannot reach Ollama at ${url}`;
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:delete-model',
+          context: { modelName, url },
+        });
       }
       try {
         const res = await fetch(`${url}/api/delete`, {
@@ -1339,11 +1645,26 @@ export function registerIPCHandlers(): void {
           signal: AbortSignal.timeout(10000),
         });
         if (!res.ok) {
-          return { success: false, error: `Ollama returned status ${res.status}` };
+          const message =
+            res.status === 404
+              ? `Connected to ${url}, but this does not appear to be an Ollama endpoint.`
+              : `Ollama returned status ${res.status}`;
+          return makeLocalActionFailure({
+            code: res.status === 404 ? 'OLLAMA_WRONG_ENDPOINT' : 'OLLAMA_UNREACHABLE',
+            message,
+            action: 'ollama:delete-model',
+            context: { modelName, status: res.status, url },
+          });
         }
         return { success: true };
       } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Delete failed' };
+        const message = toDiagnosticsSafeString(err, 'Delete failed');
+        return makeLocalActionFailure({
+          code: mapOllamaErrorCode(message),
+          message,
+          action: 'ollama:delete-model',
+          context: { modelName, url },
+        });
       }
     },
   );
@@ -1356,8 +1677,48 @@ export function registerIPCHandlers(): void {
     return getAirLLMServer().getStatus();
   });
 
-  handle('airllm:start', async (_event: IpcMainInvokeEvent) => {
-    return getAirLLMServer().start();
+  handle('airllm:start', async (_event: IpcMainInvokeEvent): Promise<LocalActionResult> => {
+    const started = await getAirLLMServer().start();
+    if (!started.success) {
+      const message = started.error || 'Failed to start AirLLM server';
+      return makeLocalActionFailure({
+        code: mapAirllmErrorCode(message, 'AIRLLM_SERVER_UNREACHABLE'),
+        message,
+        action: 'airllm:start',
+      });
+    }
+
+    try {
+      const res = await fetch(`${AIRLLM_SERVER_URL}/health`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) {
+        return makeLocalActionFailure({
+          code: 'AIRLLM_SERVER_UNREACHABLE',
+          message: `AirLLM health check failed with status ${res.status}`,
+          action: 'airllm:start',
+          context: { status: res.status },
+        });
+      }
+      const payload = (await res.json()) as { airllm_available?: boolean };
+      if (!payload.airllm_available) {
+        return makeLocalActionFailure({
+          code: 'AIRLLM_DEPS_MISSING',
+          message:
+            'AirLLM Python dependencies are missing (airllm package unavailable). Install dependencies in Advanced options and retry.',
+          action: 'airllm:start',
+        });
+      }
+    } catch (error) {
+      const message = toDiagnosticsSafeString(error, 'Failed to validate AirLLM startup');
+      return makeLocalActionFailure({
+        code: mapAirllmErrorCode(message, 'AIRLLM_SERVER_UNREACHABLE'),
+        message,
+        action: 'airllm:start',
+      });
+    }
+
+    return { success: true };
   });
 
   handle('airllm:install-deps', async (event: IpcMainInvokeEvent) => {
@@ -1377,7 +1738,15 @@ export function registerIPCHandlers(): void {
         ? 'AirLLM dependencies installed successfully.'
         : result.error || 'AirLLM dependency installation failed.',
     });
-    return result;
+    if (!result.success) {
+      const message = result.error || 'AirLLM dependency installation failed.';
+      return makeLocalActionFailure({
+        code: mapAirllmErrorCode(message, 'AIRLLM_DEPS_MISSING'),
+        message,
+        action: 'airllm:install-deps',
+      });
+    }
+    return { success: true };
   });
 
   handle('airllm:stop', async (_event: IpcMainInvokeEvent) => {
@@ -1386,19 +1755,59 @@ export function registerIPCHandlers(): void {
 
   handle(
     'airllm:load-model',
-    async (
-      _event: IpcMainInvokeEvent,
-      modelId: string,
-    ): Promise<{ success: boolean; error?: string }> => {
+    async (_event: IpcMainInvokeEvent, modelId: string): Promise<LocalActionResult> => {
       const server = getAirLLMServer();
       const status = server.getStatus();
       if (!status.running) {
-        const started = await server.start();
-        if (!started.success) return started;
+        const started = await getAirLLMServer().start();
+        if (!started.success) {
+          const message = started.error || 'Failed to start AirLLM server';
+          return makeLocalActionFailure({
+            code: mapAirllmErrorCode(message, 'AIRLLM_SERVER_UNREACHABLE'),
+            message,
+            action: 'airllm:load-model',
+            context: { modelId },
+          });
+        }
+      }
+
+      try {
+        const health = await fetch(`${AIRLLM_SERVER_URL}/health`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!health.ok) {
+          return makeLocalActionFailure({
+            code: 'AIRLLM_SERVER_UNREACHABLE',
+            message: `AirLLM health check failed with status ${health.status}`,
+            action: 'airllm:load-model',
+            recoverable: true,
+            context: { modelId, status: health.status },
+          });
+        }
+        const payload = (await health.json()) as { airllm_available?: boolean };
+        if (!payload.airllm_available) {
+          return makeLocalActionFailure({
+            code: 'AIRLLM_DEPS_MISSING',
+            message:
+              'AirLLM Python dependencies are missing (airllm package unavailable). Install dependencies in Advanced options and retry.',
+            action: 'airllm:load-model',
+            recoverable: true,
+            context: { modelId },
+          });
+        }
+      } catch (error) {
+        const message = toDiagnosticsSafeString(error, 'Failed to validate AirLLM health');
+        return makeLocalActionFailure({
+          code: mapAirllmErrorCode(message, 'AIRLLM_SERVER_UNREACHABLE'),
+          message,
+          action: 'airllm:load-model',
+          recoverable: true,
+          context: { modelId },
+        });
       }
       try {
         server.setLoadedModel(null);
-        const res = await fetch('http://127.0.0.1:11435/api/load', {
+        const res = await fetch(`${AIRLLM_SERVER_URL}/api/load`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: modelId }),
@@ -1409,33 +1818,56 @@ export function registerIPCHandlers(): void {
           try {
             const parsed = JSON.parse(text) as { detail?: string };
             const error = parsed.detail || text || `AirLLM returned status ${res.status}`;
-            return { success: false, error };
+            return makeLocalActionFailure({
+              code: mapAirllmErrorCode(error, 'AIRLLM_MODEL_LOAD_FAILED'),
+              message: error,
+              action: 'airllm:load-model',
+              recoverable: true,
+              context: { modelId, status: res.status },
+            });
           } catch {
-            return { success: false, error: text || `AirLLM returned status ${res.status}` };
+            const message = text || `AirLLM returned status ${res.status}`;
+            return makeLocalActionFailure({
+              code: mapAirllmErrorCode(message, 'AIRLLM_MODEL_LOAD_FAILED'),
+              message,
+              action: 'airllm:load-model',
+              recoverable: true,
+              context: { modelId, status: res.status },
+            });
           }
         }
         server.setLoadedModel(modelId);
         return { success: true };
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-          return {
-            success: false,
-            error:
+          return makeLocalActionFailure({
+            code: 'AIRLLM_MODEL_LOAD_FAILED',
+            message:
               'Model load timed out. Large first-time downloads can take 10-60+ minutes. Keep AirLLM running and retry.',
-          };
+            action: 'airllm:load-model',
+            recoverable: true,
+            context: { modelId },
+          });
         }
-        return { success: false, error: err instanceof Error ? err.message : 'Load failed' };
+        const message = toDiagnosticsSafeString(err, 'Load failed');
+        return makeLocalActionFailure({
+          code: mapAirllmErrorCode(message, 'AIRLLM_MODEL_LOAD_FAILED'),
+          message,
+          action: 'airllm:load-model',
+          recoverable: true,
+          context: { modelId },
+        });
       }
     },
   );
 
   handle('airllm:server-url', async (_event: IpcMainInvokeEvent) => {
-    return { url: 'http://127.0.0.1:11435' };
+    return { url: AIRLLM_SERVER_URL };
   });
 
   handle('airllm:download-status', async (_event: IpcMainInvokeEvent) => {
     try {
-      const res = await fetch('http://127.0.0.1:11435/api/download-status', {
+      const res = await fetch(`${AIRLLM_SERVER_URL}/api/download-status`, {
         signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) {

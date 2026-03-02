@@ -71,6 +71,11 @@ export type {
   ToolSupportStatus,
   ConnectedProvider,
   ProviderSettings,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthCategory,
+  LocalHealthReport,
+  LocalSetupErrorCode,
   LocalSetupStatus,
 } from './types/providerSettings.js';
 export {

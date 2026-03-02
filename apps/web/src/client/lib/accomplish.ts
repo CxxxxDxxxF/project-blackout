@@ -24,6 +24,9 @@ import type {
   ToolSupportStatus,
   Skill,
   McpConnector,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthReport,
   LocalSetupStatus,
 } from '@accomplish_ai/agent-core/common';
 
@@ -66,6 +69,10 @@ interface AccomplishAPI {
     error?: string;
   }>;
   getLocalSetupStatus(): Promise<LocalSetupStatus>;
+  getLocalHealthReport?(): Promise<LocalHealthReport>;
+  getLocalRecentErrors?(): Promise<LocalErrorRecord[]>;
+  clearLocalRecentErrors?(): Promise<void>;
+  exportLocalDiagnostics?(): Promise<{ path?: string; blob?: string }>;
 
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;
@@ -225,14 +232,8 @@ interface AccomplishAPI {
     }>;
     error?: string;
   }>;
-  ollamaPullModel(
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{ success: boolean; error?: string }>;
-  ollamaDeleteModel(
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{ success: boolean; error?: string }>;
+  ollamaPullModel(modelName: string, baseUrl?: string): Promise<LocalActionResult>;
+  ollamaDeleteModel(modelName: string, baseUrl?: string): Promise<LocalActionResult>;
   onOllamaPullProgress?(
     callback: (data: {
       model: string;
@@ -249,10 +250,10 @@ interface AccomplishAPI {
     modelLoaded?: boolean;
     modelId?: string | null;
   }>;
-  airllmStart(): Promise<{ success: boolean; error?: string }>;
-  airllmInstallDependencies(): Promise<{ success: boolean; error?: string }>;
+  airllmStart(): Promise<LocalActionResult>;
+  airllmInstallDependencies(): Promise<LocalActionResult>;
   airllmStop(): Promise<void>;
-  airllmLoadModel(modelId: string): Promise<{ success: boolean; error?: string }>;
+  airllmLoadModel(modelId: string): Promise<LocalActionResult>;
   airllmServerUrl(): Promise<{ url: string }>;
   airllmDownloadStatus(): Promise<{
     active: boolean;
