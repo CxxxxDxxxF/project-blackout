@@ -85,3 +85,18 @@ export {
   deleteConnector,
   clearAllConnectors,
 } from './connectors.js';
+
+export {
+  getAllCapabilityPacks,
+  getCapabilityPackById,
+  getCapabilityPackBySource,
+  upsertCapabilityPack,
+  setCapabilityPackStatus,
+  deleteCapabilityPack,
+  clearAllCapabilityPacks,
+  getCapabilityPackAssets,
+  getCapabilityPackAssetByKey,
+  upsertCapabilityPackAsset,
+  replaceCapabilityPackAssets,
+  deleteCapabilityPackAssets,
+} from './capabilityPacks.js';

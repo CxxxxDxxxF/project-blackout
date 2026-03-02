@@ -116,6 +116,21 @@ export type {
 // Skills types
 export type { SkillSource, Skill, SkillFrontmatter } from './types/skills.js';
 
+// Capability pack types
+export type {
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackActionResult,
+  CapabilityPackAssetType,
+  CapabilityPackConnectorManifestEntry,
+  CapabilityPackErrorCode,
+  CapabilityPackInstallPreview,
+  CapabilityPackManifest,
+  CapabilityPackSkillManifestEntry,
+  CapabilityPackStatus,
+  CapabilityPackUpdateCheck,
+} from './types/capabilityPacks.js';
+
 // Other types
 export type { TodoItem } from './types/todo.js';
 export type { LogLevel, LogSource, LogEntry } from './types/logging.js';

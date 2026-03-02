@@ -98,6 +98,20 @@ export type {
 export type { SkillSource, Skill, SkillFrontmatter } from './skills.js';
 
 export type {
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackActionResult,
+  CapabilityPackAssetType,
+  CapabilityPackConnectorManifestEntry,
+  CapabilityPackErrorCode,
+  CapabilityPackInstallPreview,
+  CapabilityPackManifest,
+  CapabilityPackSkillManifestEntry,
+  CapabilityPackStatus,
+  CapabilityPackUpdateCheck,
+} from './capabilityPacks.js';
+
+export type {
   ConnectorStatus,
   OAuthTokens,
   OAuthMetadata,

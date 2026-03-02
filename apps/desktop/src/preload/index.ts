@@ -11,6 +11,10 @@ import type {
   Skill,
   TodoItem,
   McpConnector,
+  CapabilityPack,
+  CapabilityPackActionResult,
+  CapabilityPackInstallPreview,
+  CapabilityPackUpdateCheck,
   TaskConfig,
   LocalActionResult,
   LocalErrorRecord,
@@ -602,6 +606,35 @@ const accomplishAPI = {
     ipcRenderer.invoke('skills:open-in-editor', filePath),
   showSkillInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('skills:show-in-folder', filePath),
+
+  // Capability packs
+  packsList: (): Promise<
+    Array<
+      CapabilityPack & {
+        skillCount: number;
+        connectorCount: number;
+      }
+    >
+  > => ipcRenderer.invoke('packs:list'),
+  packsPreviewFromGithub: (
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackInstallPreview>> =>
+    ipcRenderer.invoke('packs:preview-from-github', sourceUrl),
+  packsInstallFromGithub: (
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPack>> =>
+    ipcRenderer.invoke('packs:install-from-github', sourceUrl),
+  packsCheckUpdates: (
+    packId: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackUpdateCheck>> =>
+    ipcRenderer.invoke('packs:check-updates', packId),
+  packsUpdate: (packId: string): Promise<CapabilityPackActionResult<CapabilityPack>> =>
+    ipcRenderer.invoke('packs:update', packId),
+  packsUninstall: (
+    packId: string,
+  ): Promise<CapabilityPackActionResult<{ removedAssets: number }>> =>
+    ipcRenderer.invoke('packs:uninstall', packId),
+  packsGetAllowlist: (): Promise<string[]> => ipcRenderer.invoke('packs:get-allowlist'),
 
   // MCP Connectors
   getConnectors: (): Promise<McpConnector[]> => ipcRenderer.invoke('connectors:list'),

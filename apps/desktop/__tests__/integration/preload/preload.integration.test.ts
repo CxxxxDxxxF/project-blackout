@@ -279,6 +279,55 @@ describe('Preload Script Integration', () => {
         expect(mockInvoke).toHaveBeenCalledWith('skills:get-user-skills-path');
       });
     });
+
+    describe('Capability Packs Operations', () => {
+      it('packsList should invoke packs:list', async () => {
+        await (capturedAccomplishAPI.packsList as () => Promise<unknown>)();
+        expect(mockInvoke).toHaveBeenCalledWith('packs:list');
+      });
+
+      it('packsPreviewFromGithub should invoke packs:preview-from-github', async () => {
+        const sourceUrl = 'https://github.com/CxxxxDxxxF/MoneyPrinterV2';
+        await (capturedAccomplishAPI.packsPreviewFromGithub as (url: string) => Promise<unknown>)(
+          sourceUrl,
+        );
+        expect(mockInvoke).toHaveBeenCalledWith('packs:preview-from-github', sourceUrl);
+      });
+
+      it('packsInstallFromGithub should invoke packs:install-from-github', async () => {
+        const sourceUrl = 'https://github.com/CxxxxDxxxF/public-apis';
+        await (capturedAccomplishAPI.packsInstallFromGithub as (url: string) => Promise<unknown>)(
+          sourceUrl,
+        );
+        expect(mockInvoke).toHaveBeenCalledWith('packs:install-from-github', sourceUrl);
+      });
+
+      it('packsCheckUpdates should invoke packs:check-updates', async () => {
+        await (capturedAccomplishAPI.packsCheckUpdates as (id: string) => Promise<unknown>)(
+          'cxxxxdxxxf/moneyprinterv2',
+        );
+        expect(mockInvoke).toHaveBeenCalledWith('packs:check-updates', 'cxxxxdxxxf/moneyprinterv2');
+      });
+
+      it('packsUpdate should invoke packs:update', async () => {
+        await (capturedAccomplishAPI.packsUpdate as (id: string) => Promise<unknown>)(
+          'cxxxxdxxxf/moneyprinterv2',
+        );
+        expect(mockInvoke).toHaveBeenCalledWith('packs:update', 'cxxxxdxxxf/moneyprinterv2');
+      });
+
+      it('packsUninstall should invoke packs:uninstall', async () => {
+        await (capturedAccomplishAPI.packsUninstall as (id: string) => Promise<unknown>)(
+          'cxxxxdxxxf/public-apis',
+        );
+        expect(mockInvoke).toHaveBeenCalledWith('packs:uninstall', 'cxxxxdxxxf/public-apis');
+      });
+
+      it('packsGetAllowlist should invoke packs:get-allowlist', async () => {
+        await (capturedAccomplishAPI.packsGetAllowlist as () => Promise<unknown>)();
+        expect(mockInvoke).toHaveBeenCalledWith('packs:get-allowlist');
+      });
+    });
   });
 
   describe('Event Subscriptions', () => {

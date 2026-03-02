@@ -492,6 +492,15 @@ describe('IPC Handlers Integration', () => {
       expect(handlers.has('local:get-recent-errors')).toBe(true);
       expect(handlers.has('local:clear-recent-errors')).toBe(true);
       expect(handlers.has('local:export-diagnostics')).toBe(true);
+
+      // Capability packs handlers
+      expect(handlers.has('packs:list')).toBe(true);
+      expect(handlers.has('packs:preview-from-github')).toBe(true);
+      expect(handlers.has('packs:install-from-github')).toBe(true);
+      expect(handlers.has('packs:check-updates')).toBe(true);
+      expect(handlers.has('packs:update')).toBe(true);
+      expect(handlers.has('packs:uninstall')).toBe(true);
+      expect(handlers.has('packs:get-allowlist')).toBe(true);
     });
   });
 

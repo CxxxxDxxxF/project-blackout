@@ -24,6 +24,10 @@ import type {
   ToolSupportStatus,
   Skill,
   McpConnector,
+  CapabilityPack,
+  CapabilityPackActionResult,
+  CapabilityPackInstallPreview,
+  CapabilityPackUpdateCheck,
   LocalActionResult,
   LocalErrorRecord,
   LocalHealthReport,
@@ -468,6 +472,26 @@ interface AccomplishAPI {
   resyncSkills(): Promise<Skill[]>;
   openSkillInEditor(filePath: string): Promise<void>;
   showSkillInFolder(filePath: string): Promise<void>;
+
+  // Capability Packs
+  packsList?(): Promise<
+    Array<
+      CapabilityPack & {
+        skillCount: number;
+        connectorCount: number;
+      }
+    >
+  >;
+  packsPreviewFromGithub?(
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackInstallPreview>>;
+  packsInstallFromGithub?(sourceUrl: string): Promise<CapabilityPackActionResult<CapabilityPack>>;
+  packsCheckUpdates?(
+    packId: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackUpdateCheck>>;
+  packsUpdate?(packId: string): Promise<CapabilityPackActionResult<CapabilityPack>>;
+  packsUninstall?(packId: string): Promise<CapabilityPackActionResult<{ removedAssets: number }>>;
+  packsGetAllowlist?(): Promise<string[]>;
 
   // MCP Connectors
   getConnectors(): Promise<McpConnector[]>;

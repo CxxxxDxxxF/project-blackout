@@ -97,6 +97,10 @@ import type {
   LocalHealthReport,
   LocalSetupErrorCode,
   LocalSetupStatus,
+  CapabilityPack,
+  CapabilityPackActionResult,
+  CapabilityPackInstallPreview,
+  CapabilityPackUpdateCheck,
 } from '@accomplish_ai/agent-core';
 import {
   DEFAULT_PROVIDERS,
@@ -114,6 +118,7 @@ import {
 } from '../test-utils/mock-task-flow';
 import { skillsManager } from '../skills';
 import { registerVertexHandlers } from '../providers';
+import { getCapabilityPacksService } from '../services/capabilityPacks';
 
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 const CURRENT_FILE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -2483,6 +2488,73 @@ export function registerIPCHandlers(): void {
 
   handle('skills:show-in-folder', async (_event, filePath: string) => {
     shell.showItemInFolder(filePath);
+  });
+
+  // ── Capability Packs ────────────────────────────────────────────────
+
+  const capabilityPacks = getCapabilityPacksService();
+
+  handle('packs:list', async () => {
+    return capabilityPacks.listPacks();
+  });
+
+  handle(
+    'packs:preview-from-github',
+    async (
+      _event: IpcMainInvokeEvent,
+      sourceUrl: string,
+    ): Promise<CapabilityPackActionResult<CapabilityPackInstallPreview>> => {
+      const sanitizedSourceUrl = sanitizeString(sourceUrl, 'sourceUrl', 512);
+      return capabilityPacks.previewFromGitHub(sanitizedSourceUrl);
+    },
+  );
+
+  handle(
+    'packs:install-from-github',
+    async (
+      _event: IpcMainInvokeEvent,
+      sourceUrl: string,
+    ): Promise<CapabilityPackActionResult<CapabilityPack>> => {
+      const sanitizedSourceUrl = sanitizeString(sourceUrl, 'sourceUrl', 512);
+      return capabilityPacks.installFromGitHub(sanitizedSourceUrl);
+    },
+  );
+
+  handle(
+    'packs:check-updates',
+    async (
+      _event: IpcMainInvokeEvent,
+      packId: string,
+    ): Promise<CapabilityPackActionResult<CapabilityPackUpdateCheck>> => {
+      const sanitizedPackId = sanitizeString(packId, 'packId', 256);
+      return capabilityPacks.checkUpdates(sanitizedPackId);
+    },
+  );
+
+  handle(
+    'packs:update',
+    async (
+      _event: IpcMainInvokeEvent,
+      packId: string,
+    ): Promise<CapabilityPackActionResult<CapabilityPack>> => {
+      const sanitizedPackId = sanitizeString(packId, 'packId', 256);
+      return capabilityPacks.update(sanitizedPackId);
+    },
+  );
+
+  handle(
+    'packs:uninstall',
+    async (
+      _event: IpcMainInvokeEvent,
+      packId: string,
+    ): Promise<CapabilityPackActionResult<{ removedAssets: number }>> => {
+      const sanitizedPackId = sanitizeString(packId, 'packId', 256);
+      return capabilityPacks.uninstall(sanitizedPackId);
+    },
+  );
+
+  handle('packs:get-allowlist', async (): Promise<string[]> => {
+    return capabilityPacks.getAllowlist();
   });
 
   // ── MCP Connectors ──────────────────────────────────────────────────

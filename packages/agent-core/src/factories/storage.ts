@@ -73,6 +73,19 @@ import {
   deleteConnector,
   clearAllConnectors,
 } from '../storage/repositories/connectors.js';
+import {
+  getAllCapabilityPacks,
+  getCapabilityPackById,
+  getCapabilityPackBySource,
+  upsertCapabilityPack,
+  setCapabilityPackStatus,
+  deleteCapabilityPack,
+  clearAllCapabilityPacks,
+  getCapabilityPackAssets,
+  upsertCapabilityPackAsset,
+  replaceCapabilityPackAssets,
+  deleteCapabilityPackAssets,
+} from '../storage/repositories/capabilityPacks.js';
 import { SecureStorage } from '../internal/classes/SecureStorage.js';
 import type { OAuthTokens } from '../common/types/connector.js';
 import type { StorageAPI, StorageOptions } from '../types/storage.js';
@@ -178,6 +191,20 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
       }
     },
     deleteConnectorTokens: (connectorId) => secureStorage.delete(`connector-tokens:${connectorId}`),
+
+    // Capability packs
+    getAllCapabilityPacks: () => getAllCapabilityPacks(),
+    getCapabilityPackById: (id) => getCapabilityPackById(id),
+    getCapabilityPackBySource: (owner, repo) => getCapabilityPackBySource(owner, repo),
+    upsertCapabilityPack: (pack) => upsertCapabilityPack(pack),
+    setCapabilityPackStatus: (id, status, lastError) =>
+      setCapabilityPackStatus(id, status, lastError),
+    deleteCapabilityPack: (id) => deleteCapabilityPack(id),
+    clearAllCapabilityPacks: () => clearAllCapabilityPacks(),
+    getCapabilityPackAssets: (packId) => getCapabilityPackAssets(packId),
+    upsertCapabilityPackAsset: (asset) => upsertCapabilityPackAsset(asset),
+    replaceCapabilityPackAssets: (packId, assets) => replaceCapabilityPackAssets(packId, assets),
+    deleteCapabilityPackAssets: (packId) => deleteCapabilityPackAssets(packId),
 
     // Secure Storage
     storeApiKey: (provider, apiKey) => secureStorage.storeApiKey(provider, apiKey),

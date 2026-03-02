@@ -369,6 +369,21 @@ export type {
 // Skills types
 export type { SkillSource, Skill, SkillFrontmatter } from './common/types/skills.js';
 
+// Capability pack types
+export type {
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackActionResult,
+  CapabilityPackAssetType,
+  CapabilityPackConnectorManifestEntry,
+  CapabilityPackErrorCode,
+  CapabilityPackInstallPreview,
+  CapabilityPackManifest,
+  CapabilityPackSkillManifestEntry,
+  CapabilityPackStatus,
+  CapabilityPackUpdateCheck,
+} from './common/types/capabilityPacks.js';
+
 // Connector types
 export type {
   ConnectorStatus,
