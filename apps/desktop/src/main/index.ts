@@ -87,6 +87,7 @@ const WEB_DIST = app.isPackaged
 let mainWindow: BrowserWindow | null = null;
 let rendererCrashRecoveryCount = 0;
 let rendererCrashRecoveryTimer: NodeJS.Timeout | null = null;
+const SAFE_MODE_ENABLED = process.env.ACCOMPLISH_SAFE_MODE === '1';
 
 function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
@@ -139,6 +140,20 @@ async function resolveDevRouterUrl(): Promise<string | null> {
 }
 
 async function loadRenderer(mainWindowRef: BrowserWindow): Promise<void> {
+  if (SAFE_MODE_ENABLED) {
+    const safeModeHtml = `<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1f2937;">
+    <h2>Safe Mode</h2>
+    <p>Renderer safe mode is enabled via <code>ACCOMPLISH_SAFE_MODE=1</code>.</p>
+    <p>Use this mode to debug renderer crash loops and local reliability issues.</p>
+    <p>Unset <code>ACCOMPLISH_SAFE_MODE</code> to return to normal mode.</p>
+  </body>
+</html>`;
+    await mainWindowRef.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(safeModeHtml)}`);
+    return;
+  }
+
   if (app.isPackaged) {
     const indexPath = path.join(WEB_DIST, 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -179,7 +194,9 @@ async function loadRenderer(mainWindowRef: BrowserWindow): Promise<void> {
     <p>Try restarting with <code>pnpm dev</code>.</p>
   </body>
 </html>`;
-  await mainWindowRef.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(diagnosticsHtml)}`);
+  await mainWindowRef.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(diagnosticsHtml)}`,
+  );
 }
 
 function createWindow() {
@@ -315,6 +332,16 @@ function createWindow() {
 
     if (rendererCrashRecoveryCount >= 3) {
       console.error('[Main] Renderer recovery limit reached. Manual restart required.');
+      const safeModeHtml = `<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1f2937;">
+    <h2>Renderer Recovery Safe Mode</h2>
+    <p>Accomplish detected repeated renderer crashes and stopped automatic reloads.</p>
+    <p>Open logs from Settings and export diagnostics from Local Models Setup.</p>
+    <p>For debugging, restart with <code>ACCOMPLISH_SAFE_MODE=1 pnpm dev</code>.</p>
+  </body>
+</html>`;
+      void mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(safeModeHtml)}`);
       return;
     }
 

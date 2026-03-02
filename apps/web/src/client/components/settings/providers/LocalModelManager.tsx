@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getAccomplish } from '@/lib/accomplish';
 import { motion, AnimatePresence } from 'framer-motion';
 import { type LlmfitModel } from './HardwareAdvisor';
+import type { LocalSetupErrorCode } from '@accomplish_ai/agent-core/common';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,42 @@ interface LocalModelManagerProps {
   onAirllmRouted?: (url: string) => void;
 }
 
+function isAirllmDependencyError(
+  message: string | null,
+  code?: LocalSetupErrorCode | null,
+): boolean {
+  if (code === 'AIRLLM_DEPS_MISSING') {
+    return true;
+  }
+  if (!message) {
+    return false;
+  }
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('airllm package is not installed') ||
+    normalized.includes('airllm dependencies are missing') ||
+    normalized.includes('modulenotfounderror') ||
+    normalized.includes('no module named')
+  );
+}
+
+function mapAirllmError(
+  code: LocalSetupErrorCode | undefined,
+  message: string,
+  serverUrl: string,
+): string {
+  if (code === 'AIRLLM_DEPS_MISSING') {
+    return 'AirLLM dependencies are missing. Install dependencies below, then retry.';
+  }
+  if (code === 'AIRLLM_SERVER_UNREACHABLE') {
+    return `AirLLM server is unreachable at ${serverUrl}. Start or restart AirLLM, then retry.`;
+  }
+  if (code === 'AIRLLM_MODEL_LOAD_FAILED') {
+    return message || 'AirLLM model load failed. Retry the load action.';
+  }
+  return message;
+}
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -101,6 +138,7 @@ export function LocalModelManager({
   const [airllmLoading, setAirllmLoading] = useState(false);
   const [airllmLoadingTarget, setAirllmLoadingTarget] = useState<string | null>(null);
   const [airllmError, setAirllmError] = useState<string | null>(null);
+  const [airllmErrorCode, setAirllmErrorCode] = useState<LocalSetupErrorCode | null>(null);
   const [airllmSuccess, setAirllmSuccess] = useState<string | null>(null);
   const [airllmServerUrl, setAirllmServerUrl] = useState<string | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<AirLLMDownloadStatus | null>(null);
@@ -112,6 +150,7 @@ export function LocalModelManager({
   // FitLLM / Hardware Advisor
   const [fitInstalled, setFitInstalled] = useState<boolean | null>(null);
   const [fitScanning, setFitScanning] = useState(false);
+  const [fitScanTarget, setFitScanTarget] = useState<'ollama' | 'airllm'>('ollama');
   const [fitResult, setFitResult] = useState<LlmfitScanResult | null>(null);
   const [fitRankMap, setFitRankMap] = useState<Map<string, LlmfitModel>>(new Map());
 
@@ -238,12 +277,20 @@ export function LocalModelManager({
   const handleInstallDeps = useCallback(async () => {
     setInstallingDeps(true);
     setAirllmError(null);
+    setAirllmErrorCode(null);
     setInstallLogs(['Installing AirLLM dependencies...']);
     const result = await getAccomplish().airllmInstallDependencies();
     setInstallingDeps(false);
-    if (!result.success) setAirllmError(result.error ?? 'Install failed');
-    else setAirllmSuccess('Dependencies installed successfully.');
-  }, []);
+    if (!result.success) {
+      setAirllmErrorCode(result.code ?? null);
+      setAirllmError(
+        mapAirllmError(result.code, result.error ?? 'Install failed', airllmServerUrl || ''),
+      );
+    } else {
+      setAirllmSuccess('Dependencies installed successfully.');
+      setAirllmErrorCode(null);
+    }
+  }, [airllmServerUrl]);
 
   const handleAirllmToggle = useCallback(async () => {
     setAirllmLoading(true);
@@ -252,19 +299,31 @@ export function LocalModelManager({
       await getAccomplish().airllmStop();
     } else {
       const result = await getAccomplish().airllmStart();
-      if (!result.success) setAirllmError(result.error ?? 'Failed to start AirLLM');
+      if (!result.success) {
+        setAirllmErrorCode(result.code ?? null);
+        setAirllmError(
+          mapAirllmError(
+            result.code,
+            result.error ?? 'Failed to start AirLLM',
+            airllmServerUrl || '',
+          ),
+        );
+      }
     }
     setAirllmLoading(false);
     await refreshAirllm();
-  }, [airllmStatus.running, refreshAirllm]);
+  }, [airllmServerUrl, airllmStatus.running, refreshAirllm]);
 
   const loadAirllmModel = useCallback(
     async (targetId: string) => {
       const target = targetId.trim();
-      if (!target) return;
+      if (!target) {
+        return;
+      }
       setAirllmLoading(true);
       setAirllmLoadingTarget(target);
       setAirllmError(null);
+      setAirllmErrorCode(null);
       setAirllmSuccess(null);
       setDownloadStatus({
         active: true,
@@ -273,17 +332,46 @@ export function LocalModelManager({
         status: 'Preparing download…',
       });
       startPoll();
-      const result = await getAccomplish().airllmLoadModel(target);
+      const accomplish = getAccomplish();
+
+      if (!airllmStatus.running) {
+        const started = await accomplish.airllmStart();
+        if (!started.success) {
+          stopPoll();
+          setAirllmLoadingTarget(null);
+          setAirllmLoading(false);
+          setAirllmErrorCode(started.code ?? null);
+          setAirllmError(
+            mapAirllmError(
+              started.code,
+              started.error ?? 'Failed to start AirLLM',
+              airllmServerUrl || '',
+            ),
+          );
+          await refreshAirllm();
+          return;
+        }
+      }
+
+      const result = await accomplish.airllmLoadModel(target);
       stopPoll();
       await fetchDlStatus();
       setAirllmLoadingTarget(null);
       setAirllmLoading(false);
       if (!result.success) {
-        setAirllmError(result.error ?? 'Failed to load model');
+        setAirllmErrorCode(result.code ?? null);
+        setAirllmError(
+          mapAirllmError(
+            result.code,
+            result.error ?? 'Failed to load model',
+            airllmServerUrl || '',
+          ),
+        );
+        setShowAirllm(true);
       } else {
         if (airllmServerUrl) {
-          const current = await getAccomplish().getOllamaConfig();
-          await getAccomplish().setOllamaConfig({
+          const current = await accomplish.getOllamaConfig();
+          await accomplish.setOllamaConfig({
             baseUrl: airllmServerUrl,
             enabled: true,
             lastValidated: Date.now(),
@@ -292,11 +380,20 @@ export function LocalModelManager({
           onAirllmRouted?.(airllmServerUrl);
         }
         setAirllmSuccess('Model loaded. Connection routed to AirLLM.');
+        setAirllmErrorCode(null);
         setAirllmModelId('');
         await refreshAirllm();
       }
     },
-    [airllmServerUrl, fetchDlStatus, onAirllmRouted, refreshAirllm, startPoll, stopPoll],
+    [
+      airllmServerUrl,
+      airllmStatus.running,
+      fetchDlStatus,
+      onAirllmRouted,
+      refreshAirllm,
+      startPoll,
+      stopPoll,
+    ],
   );
 
   // ── FitLLM Logic ────────────────────────────────────────────────────────────
@@ -315,6 +412,7 @@ export function LocalModelManager({
 
   const runFitScan = useCallback(async (useAirllm: boolean) => {
     setFitScanning(true);
+    setFitScanTarget(useAirllm ? 'airllm' : 'ollama');
     setFitResult(null);
     const result: LlmfitScanResult = await getAccomplish()
       .llmfitScan(useAirllm)
@@ -344,11 +442,7 @@ export function LocalModelManager({
   // Suggestions: FitLLM models NOT yet installed
   const installedNames = new Set(ollamaModels.map((m) => m.name));
   const suggestions = fitResult?.success
-    ? (fitResult.models ?? [])
-        .filter(
-          (m) => m.ollamaName && !installedNames.has(m.ollamaName) && m.fitLevel !== 'Too Tight',
-        )
-        .slice(0, 4)
+    ? (fitResult.models ?? []).filter((m) => m.fitLevel !== 'Too Tight').slice(0, 4)
     : [];
 
   const etaLabel =
@@ -367,21 +461,38 @@ export function LocalModelManager({
         <h3 className="text-sm font-semibold text-foreground">Local Model Manager</h3>
         <div className="flex items-center gap-2">
           {fitInstalled && (
-            <button
-              onClick={() => void runFitScan(false)}
-              disabled={fitScanning}
-              className="flex items-center gap-1.5 rounded-md bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors disabled:opacity-50"
-            >
-              {fitScanning ? (
-                <>
-                  <span className="animate-pulse">◉</span> Scanning...
-                </>
-              ) : (
-                <>
-                  <span>◈</span> Scan Hardware
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void runFitScan(false)}
+                disabled={fitScanning}
+                className="flex items-center gap-1.5 rounded-md bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors disabled:opacity-50"
+              >
+                {fitScanning && fitScanTarget === 'ollama' ? (
+                  <>
+                    <span className="animate-pulse">◉</span> Scanning...
+                  </>
+                ) : (
+                  <>
+                    <span>◈</span> Scan for Ollama
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => void runFitScan(true)}
+                disabled={fitScanning}
+                className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 hover:bg-muted/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors disabled:opacity-50"
+              >
+                {fitScanning && fitScanTarget === 'airllm' ? (
+                  <>
+                    <span className="animate-pulse">◉</span> Scanning...
+                  </>
+                ) : (
+                  <>
+                    <span>◈</span> Scan for AirLLM
+                  </>
+                )}
+              </button>
+            </div>
           )}
           <button
             onClick={() => void refreshOllama()}
@@ -540,16 +651,43 @@ export function LocalModelManager({
                       {model.quantization} · {model.estimatedSpeedTps} t/s · {model.runMode}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void pullModel(model.ollamaName!)}
-                    disabled={pulling}
-                    className="shrink-0 rounded-md bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors disabled:opacity-50"
-                  >
-                    {pulling ? 'Pulling…' : 'Install'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void loadAirllmModel(model.name)}
+                      disabled={airllmLoading}
+                      className="shrink-0 rounded-md border border-border bg-muted/40 hover:bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors disabled:opacity-50"
+                    >
+                      {airllmLoading && airllmLoadingTarget === model.name
+                        ? 'Loading…'
+                        : 'Load with AirLLM'}
+                    </button>
+                    {model.ollamaName && !installedNames.has(model.ollamaName) && (
+                      <button
+                        onClick={() => void pullModel(model.ollamaName!)}
+                        disabled={pulling}
+                        className="shrink-0 rounded-md bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors disabled:opacity-50"
+                      >
+                        {pulling ? 'Pulling…' : 'Install to Ollama'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
+            {airllmError && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+                <p>{airllmError}</p>
+                {isAirllmDependencyError(airllmError, airllmErrorCode) && (
+                  <button
+                    onClick={() => void handleInstallDeps()}
+                    disabled={installingDeps}
+                    className="mt-2 rounded-md border border-red-500/40 bg-red-500/15 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/25 disabled:opacity-50"
+                  >
+                    {installingDeps ? 'Installing dependencies…' : 'Install AirLLM dependencies'}
+                  </button>
+                )}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -773,7 +911,20 @@ export function LocalModelManager({
                 </div>
               )}
 
-              {airllmError && <p className="text-xs text-red-400">{airllmError}</p>}
+              {airllmError && (
+                <div className="space-y-2">
+                  <p className="text-xs text-red-400">{airllmError}</p>
+                  {isAirllmDependencyError(airllmError, airllmErrorCode) && (
+                    <button
+                      onClick={() => void handleInstallDeps()}
+                      disabled={installingDeps}
+                      className="rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      {installingDeps ? 'Installing dependencies…' : 'Install AirLLM dependencies'}
+                    </button>
+                  )}
+                </div>
+              )}
               {airllmSuccess && <p className="text-xs text-green-400">{airllmSuccess}</p>}
             </motion.div>
           )}

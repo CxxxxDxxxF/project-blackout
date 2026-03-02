@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
@@ -15,12 +15,18 @@ import {
   ModelSelector,
 } from '../shared';
 import { LocalModelManager } from './LocalModelManager';
+import { LocalDiagnosticsPanel } from './LocalDiagnosticsPanel';
+import { LocalHealthBanner } from './LocalHealthBanner';
 import { useLocalSetupFlow } from '../hooks/useLocalSetupFlow';
 
 import ollamaLogo from '/assets/ai-logos/ollama.svg';
 
 const LOCAL_SETUP_GUIDED_FLOW =
   import.meta.env.DEV || import.meta.env.VITE_LOCAL_SETUP_GUIDED_FLOW === '1';
+const LOCAL_HEALTH_REPORT_V2 =
+  import.meta.env.DEV || import.meta.env.VITE_LOCAL_HEALTH_REPORT_V2 === '1';
+const LOCAL_DIAGNOSTICS_PANEL =
+  import.meta.env.DEV || import.meta.env.VITE_LOCAL_DIAGNOSTICS_PANEL === '1';
 
 interface OllamaModel {
   id: string;
@@ -244,20 +250,27 @@ export function OllamaProviderForm({
     actionLoading,
     error: setupError,
     ollamaReachable,
-    ollamaModelCount,
     airllmRunning,
     airllmServerUrl,
     fitllmInstalled,
     recommendations,
     routingEngine,
+    healthCategory,
+    healthReport,
+    localIssues,
+    recentErrors,
     stepStatus,
     canOfferAirllmFallback,
     refreshStatus,
+    refreshRecentErrors,
     connectToOllama,
     installToOllama,
     loadWithAirllm,
+    installAirllmDependencies,
     switchRoutingToOllama,
     keepAirllmRouting,
+    clearRecentErrors,
+    exportDiagnostics,
     runFastSetup,
   } = useLocalSetupFlow({
     serverUrl,
@@ -286,6 +299,21 @@ export function OllamaProviderForm({
     name: m.name,
     toolSupport: (m as { toolSupport?: ToolSupportStatus }).toolSupport || 'unknown',
   }));
+
+  const hasRunnableModel = models.length > 0;
+  const selectedModelId = connectedProvider?.selectedModelId || null;
+  const selectedModelAvailable = selectedModelId
+    ? models.some((model) => model.id === selectedModelId)
+    : false;
+
+  const displayedStepStatus = useMemo(
+    () => ({
+      ...stepStatus,
+      ensureModel: hasRunnableModel ? ('done' as const) : ('pending' as const),
+      ready: isConnected && selectedModelAvailable ? ('done' as const) : ('pending' as const),
+    }),
+    [hasRunnableModel, isConnected, selectedModelAvailable, stepStatus],
+  );
 
   return (
     <div
@@ -316,21 +344,47 @@ export function OllamaProviderForm({
             <div className="grid gap-2 md:grid-cols-2">
               <SetupStep
                 title={t('localSetup.steps.detectOllama')}
-                status={stepStatus.detect}
+                status={displayedStepStatus.detect}
                 t={t}
               />
               <SetupStep
                 title={t('localSetup.steps.connectEndpoint')}
-                status={stepStatus.connect}
+                status={displayedStepStatus.connect}
                 t={t}
               />
               <SetupStep
                 title={t('localSetup.steps.ensureModel')}
-                status={stepStatus.ensureModel}
+                status={displayedStepStatus.ensureModel}
                 t={t}
               />
-              <SetupStep title={t('localSetup.steps.ready')} status={stepStatus.ready} t={t} />
+              <SetupStep
+                title={t('localSetup.steps.ready')}
+                status={displayedStepStatus.ready}
+                t={t}
+              />
             </div>
+
+            {LOCAL_HEALTH_REPORT_V2 && (
+              <LocalHealthBanner
+                healthCategory={healthCategory}
+                issues={localIssues}
+                report={healthReport}
+                actionLoading={actionLoading}
+                onRunFastSetup={() => {
+                  void runFastSetup();
+                }}
+                onInstallAirllmDeps={() => {
+                  void installAirllmDependencies();
+                }}
+                onSwitchToOllama={() => {
+                  void switchRoutingToOllama();
+                }}
+                onRefresh={() => {
+                  void refreshStatus();
+                  void refreshRecentErrors();
+                }}
+              />
+            )}
 
             {!ollamaReachable && (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
@@ -363,7 +417,7 @@ export function OllamaProviderForm({
               </div>
             )}
 
-            {ollamaModelCount === 0 && (
+            {!hasRunnableModel && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-foreground">
                   {t('localSetup.recommendedTitle')}
@@ -539,28 +593,39 @@ export function OllamaProviderForm({
             </span>
           </button>
           {setupExpanded && (
-            <LocalModelManager
-              serverUrl={
-                isConnected
-                  ? (connectedProvider?.credentials as OllamaCredentials)?.serverUrl ||
-                    'http://localhost:11434'
-                  : serverUrl
-              }
-              onModelsChange={(modelsFromManager) => {
-                syncAvailableModels(
-                  modelsFromManager.map((m) => ({
-                    id: `ollama/${m.name}`,
-                    name: m.name,
-                    toolSupport: 'unknown',
-                  })),
-                );
-              }}
-              onAirllmRouted={(url) => {
-                if (url) {
-                  void keepAirllmRouting();
+            <>
+              <LocalModelManager
+                serverUrl={
+                  isConnected
+                    ? (connectedProvider?.credentials as OllamaCredentials)?.serverUrl ||
+                      'http://localhost:11434'
+                    : serverUrl
                 }
-              }}
-            />
+                onModelsChange={(modelsFromManager) => {
+                  syncAvailableModels(
+                    modelsFromManager.map((m) => ({
+                      id: `ollama/${m.name}`,
+                      name: m.name,
+                      toolSupport: 'unknown',
+                    })),
+                  );
+                }}
+                onAirllmRouted={(url) => {
+                  if (url) {
+                    void keepAirllmRouting();
+                  }
+                }}
+              />
+
+              {LOCAL_DIAGNOSTICS_PANEL && (
+                <LocalDiagnosticsPanel
+                  healthReport={healthReport}
+                  recentErrors={recentErrors}
+                  onClearErrors={clearRecentErrors}
+                  onExportDiagnostics={exportDiagnostics}
+                />
+              )}
+            </>
           )}
         </div>
       </div>

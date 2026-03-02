@@ -209,6 +209,45 @@
       "switchToOllama": "切换到 Ollama localhost",
       "keepAirllm": "继续使用 AirLLM"
     },
+    "health": {
+      "title": "本地健康状态",
+      "routingStale": "本地路由状态已过期，需要修复。",
+      "categories": {
+        "ready": "就绪",
+        "degraded": "降级",
+        "blocked": "阻塞",
+        "recovering": "恢复中"
+      },
+      "actions": {
+        "installAirllmDeps": "安装 AirLLM 依赖",
+        "switchToOllama": "切换到 Ollama",
+        "fastSetupModel": "安装推荐模型",
+        "refresh": "重新检查"
+      }
+    },
+    "errorCodes": {
+      "AIRLLM_DEPS_MISSING": "AirLLM 缺少依赖。",
+      "AIRLLM_SERVER_UNREACHABLE": "AirLLM 服务不可达。",
+      "AIRLLM_MODEL_LOAD_FAILED": "AirLLM 模型加载失败。",
+      "OLLAMA_UNREACHABLE": "无法连接到 Ollama。",
+      "OLLAMA_WRONG_ENDPOINT": "配置的 Ollama URL 不是有效的 Ollama 端点。",
+      "OLLAMA_NO_MODELS": "未安装可运行的 Ollama 模型。",
+      "FITLLM_UNAVAILABLE": "FitLLM 不可用（已启用兜底推荐）。"
+    },
+    "diagnostics": {
+      "title": "诊断",
+      "subtitle": "最近的本地可靠性信号与导出工具。",
+      "clearErrors": "清除错误",
+      "export": "导出诊断",
+      "exporting": "导出中...",
+      "exported": "诊断已导出：{{target}}",
+      "healthStatus": "当前本地健康状态",
+      "unavailable": "不可用",
+      "routing": "路由：{{engine}} via {{endpoint}}",
+      "recentErrors": "最近的本地错误",
+      "noErrors": "最近没有本地设置错误。",
+      "actionContext": "操作：{{action}}"
+    },
     "sources": {
       "fitllm": "FitLLM 推荐",
       "fallback": "兜底推荐"
@@ -255,6 +294,7 @@
     "providers": "服务商",
     "connectors": "连接器",
     "skills": "技能",
+    "packs": "能力包",
     "voiceInput": "语音输入",
     "appearance": "外观",
     "about": "关于"
@@ -290,6 +330,74 @@
     "disable": "禁用",
     "confirmDelete": "再次点击确认",
     "delete": "删除"
+  },
+  "packs": {
+    "description": "从允许列表内的公开 GitHub Fork 导入能力包。安装会固定到提交 SHA，并且只导入清单中声明的技能与连接器预设。",
+    "allowlist": "允许的仓库所有者：{{owners}}",
+    "disabled": "能力包功能已被特性开关禁用。",
+    "loading": "正在加载能力包...",
+    "empty": "尚未安装任何能力包。",
+    "inputPlaceholder": "https://github.com/CxxxxDxxxF/MoneyPrinterV2",
+    "status": {
+      "installed": "已安装",
+      "updateAvailable": "有可用更新",
+      "error": "错误"
+    },
+    "card": {
+      "source": "来源",
+      "version": "版本",
+      "sha": "SHA",
+      "skills": "技能",
+      "connectors": "连接器"
+    },
+    "actions": {
+      "previewInstall": "预览安装",
+      "previewing": "预览中...",
+      "refresh": "刷新",
+      "checkUpdates": "检查更新",
+      "checking": "检查中...",
+      "update": "更新",
+      "updating": "更新中...",
+      "uninstall": "卸载",
+      "uninstalling": "卸载中...",
+      "cancel": "取消",
+      "install": "安装能力包",
+      "installing": "安装中..."
+    },
+    "installDialog": {
+      "title": "安装能力包",
+      "description": "安装前请确认固定提交和声明的资源。",
+      "source": "来源",
+      "ref": "引用",
+      "sha": "固定 SHA",
+      "skillsTitle": "技能",
+      "connectorsTitle": "连接器预设",
+      "none": "无",
+      "defaultsNotice": "导入后的技能和连接器默认保持禁用，请按需手动启用。"
+    },
+    "errors": {
+      "generic": "能力包操作失败。",
+      "unavailable": "当前构建不可用能力包 API。",
+      "loadFailed": "加载能力包失败。",
+      "repoUrlRequired": "请先输入 GitHub 仓库地址。",
+      "previewFailed": "预览能力包失败。",
+      "installFailed": "安装能力包失败。",
+      "updateCheckFailed": "检查更新失败。",
+      "updateFailed": "更新能力包失败。",
+      "uninstallFailed": "卸载能力包失败。"
+    },
+    "errorCodes": {
+      "PACK_OWNER_NOT_ALLOWED": "该 GitHub 所有者不在允许列表中。",
+      "PACK_MANIFEST_MISSING": "缺少清单文件 ACCOMPLISH_PACK.yaml。",
+      "PACK_MANIFEST_INVALID": "清单格式无效。",
+      "PACK_FETCH_FAILED": "从 GitHub 获取仓库内容失败。",
+      "PACK_ASSET_INVALID": "一个或多个声明资源无效。",
+      "PACK_SKILL_CONFLICT": "与现有本地技能发生冲突。",
+      "PACK_CONNECTOR_CONFLICT": "与现有连接器发生冲突。",
+      "PACK_CONNECTOR_CONNECTED_BLOCKS_UNINSTALL": "请先断开能力包连接器，再执行卸载。",
+      "PACK_NOT_FOUND": "未找到能力包。",
+      "PACK_UPDATE_NOT_AVAILABLE": "当前没有可用更新。"
+    }
   },
   "zai": {
     "region": "地区",

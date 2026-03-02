@@ -20,13 +20,17 @@ const BROWSER_CONNECTION_ERROR_PATTERNS = [
   /Session closed/i,
   /Page closed/i,
 ];
-const MAX_BATCH_MESSAGES = 40;
-const MAX_MESSAGE_CONTENT_CHARS = 12000;
-const MAX_TOOL_INPUT_CHARS = 8000;
+const RENDERER_STABILITY_GUARDS = process.env.RENDERER_STABILITY_GUARDS !== '0';
+const MAX_BATCH_MESSAGES = RENDERER_STABILITY_GUARDS ? 20 : 40;
+const MAX_BATCH_PAYLOAD_CHARS = RENDERER_STABILITY_GUARDS ? 160000 : 300000;
+const MAX_MESSAGE_CONTENT_CHARS = RENDERER_STABILITY_GUARDS ? 6000 : 12000;
+const MAX_TOOL_INPUT_CHARS = RENDERER_STABILITY_GUARDS ? 4000 : 8000;
 const MAX_PROGRESS_MESSAGE_CHARS = 1000;
 const MAX_ERROR_MESSAGE_CHARS = 2000;
 const MAX_DEBUG_MESSAGE_CHARS = 2000;
 const MAX_DEBUG_DATA_CHARS = 4000;
+const DEBUG_RATE_WINDOW_MS = 1000;
+const MAX_DEBUG_EVENTS_PER_WINDOW = RENDERER_STABILITY_GUARDS ? 25 : 100;
 
 function isDevBrowserToolCall(toolName: string): boolean {
   return DEV_BROWSER_TOOL_PREFIXES.some((prefix) => toolName.startsWith(prefix));
@@ -96,6 +100,41 @@ function sanitizeTaskMessageForRenderer(message: TaskMessage): TaskMessage {
   };
 }
 
+function estimateSerializedChars(value: unknown): number {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+function budgetBatchMessagesForRenderer(messages: TaskMessage[]): {
+  messages: TaskMessage[];
+  droppedCount: number;
+} {
+  if (!RENDERER_STABILITY_GUARDS) {
+    return { messages, droppedCount: 0 };
+  }
+
+  const kept = [...messages];
+  let droppedCount = 0;
+  while (kept.length > 0 && estimateSerializedChars({ messages: kept }) > MAX_BATCH_PAYLOAD_CHARS) {
+    kept.shift();
+    droppedCount += 1;
+  }
+
+  if (droppedCount > 0) {
+    kept.unshift({
+      id: `renderer-budget-${Date.now()}`,
+      type: 'assistant',
+      content: `[Renderer safety] Omitted ${droppedCount} large message update(s). Full content is still persisted in task history.`,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return { messages: kept, droppedCount };
+}
+
 function isRecoverablePersistError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false;
@@ -114,6 +153,9 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
   let browserFailureWindowStart = 0;
   let browserRecoveryInFlight = false;
   let hasRendererSendFailure = false;
+  let debugWindowStart = 0;
+  let debugEventsInWindow = 0;
+  let droppedDebugEvents = 0;
 
   const forwardToRenderer = (channel: string, data: unknown) => {
     if (hasRendererSendFailure) {
@@ -143,7 +185,9 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
   return {
     onBatchedMessages: (messages: TaskMessage[]) => {
       const boundedMessages = messages.slice(Math.max(0, messages.length - MAX_BATCH_MESSAGES));
-      const sanitizedForRenderer = boundedMessages.map(sanitizeTaskMessageForRenderer);
+      const sanitizedForRendererRaw = boundedMessages.map(sanitizeTaskMessageForRenderer);
+      const { messages: sanitizedForRenderer } =
+        budgetBatchMessagesForRenderer(sanitizedForRendererRaw);
       const sanitizedForStorage = boundedMessages.map(sanitizeTaskMessage);
       forwardToRenderer('task:update:batch', { taskId, messages: sanitizedForRenderer });
       for (const msg of sanitizedForStorage) {
@@ -206,6 +250,28 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
 
     onDebug: (log: { type: string; message: string; data?: unknown }) => {
       if (storage.getDebugMode()) {
+        if (RENDERER_STABILITY_GUARDS) {
+          const now = Date.now();
+          if (now - debugWindowStart > DEBUG_RATE_WINDOW_MS) {
+            if (droppedDebugEvents > 0) {
+              forwardToRenderer('debug:log', {
+                taskId,
+                timestamp: new Date().toISOString(),
+                type: 'throttle',
+                message: `Suppressed ${droppedDebugEvents} debug log event(s) to protect renderer stability.`,
+              });
+              droppedDebugEvents = 0;
+            }
+            debugWindowStart = now;
+            debugEventsInWindow = 0;
+          }
+          if (debugEventsInWindow >= MAX_DEBUG_EVENTS_PER_WINDOW) {
+            droppedDebugEvents += 1;
+            return;
+          }
+          debugEventsInWindow += 1;
+        }
+
         const debugData =
           log.data === undefined
             ? undefined

@@ -226,6 +226,25 @@ export interface ProviderSettings {
   activeProviderId: ProviderId | null;
   connectedProviders: Partial<Record<ProviderId, ConnectedProvider>>;
   debugMode: boolean;
+  localEnginePreference?: 'ollama' | 'airllm';
+}
+
+export type LocalSetupErrorCode =
+  | 'AIRLLM_DEPS_MISSING'
+  | 'AIRLLM_SERVER_UNREACHABLE'
+  | 'AIRLLM_MODEL_LOAD_FAILED'
+  | 'OLLAMA_UNREACHABLE'
+  | 'OLLAMA_WRONG_ENDPOINT'
+  | 'OLLAMA_NO_MODELS'
+  | 'FITLLM_UNAVAILABLE';
+
+export type LocalHealthCategory = 'ready' | 'degraded' | 'blocked' | 'recovering';
+
+export interface LocalActionResult {
+  success: boolean;
+  code?: LocalSetupErrorCode;
+  error?: string;
+  recoverable?: boolean;
 }
 
 export interface LocalSetupStatus {
@@ -246,6 +265,44 @@ export interface LocalSetupStatus {
   routing: {
     activeEngine: 'ollama' | 'airllm';
   };
+}
+
+export interface LocalHealthReport {
+  status: LocalHealthCategory;
+  checkedAt: string;
+  ollama: {
+    reachable: boolean;
+    baseUrl: string;
+    modelCount: number;
+    error?: string;
+    endpointValid?: boolean;
+  };
+  airllm: {
+    running: boolean;
+    serverUrl?: string;
+    depsInstalled?: boolean;
+    modelId?: string | null;
+    error?: string;
+  };
+  llmfit: {
+    installed: boolean;
+    error?: string;
+  };
+  routing: {
+    activeEngine: 'ollama' | 'airllm';
+    stale: boolean;
+    reason?: string;
+  };
+  issues: LocalSetupErrorCode[];
+}
+
+export interface LocalErrorRecord {
+  timestamp: string;
+  code: LocalSetupErrorCode;
+  message: string;
+  action: string;
+  recoverable: boolean;
+  context?: Record<string, string | number | boolean | null>;
 }
 
 export function isProviderReady(provider: ConnectedProvider | undefined): boolean {

@@ -13,6 +13,11 @@ import type {
   ConnectedProvider,
 } from '../common/types/providerSettings.js';
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
+import type {
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackStatus,
+} from '../common/types/capabilityPacks.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -242,6 +247,32 @@ export interface ConnectorStorageAPI {
   deleteConnectorTokens(connectorId: string): void;
 }
 
+/** API for capability pack metadata and owned assets */
+export interface CapabilityPackStorageAPI {
+  /** Get all installed capability packs */
+  getAllCapabilityPacks(): CapabilityPack[];
+  /** Get a capability pack by ID */
+  getCapabilityPackById(id: string): CapabilityPack | null;
+  /** Get a capability pack by owner/repo */
+  getCapabilityPackBySource(owner: string, repo: string): CapabilityPack | null;
+  /** Create or update a capability pack */
+  upsertCapabilityPack(pack: CapabilityPack): void;
+  /** Set capability pack status and optional last error message */
+  setCapabilityPackStatus(id: string, status: CapabilityPackStatus, lastError?: string): void;
+  /** Delete a capability pack */
+  deleteCapabilityPack(id: string): void;
+  /** Delete all capability packs */
+  clearAllCapabilityPacks(): void;
+  /** Get all assets owned by a capability pack */
+  getCapabilityPackAssets(packId: string): CapabilityPackAsset[];
+  /** Create or update a capability pack asset */
+  upsertCapabilityPackAsset(asset: CapabilityPackAsset): void;
+  /** Replace all capability pack assets for a pack */
+  replaceCapabilityPackAssets(packId: string, assets: CapabilityPackAsset[]): void;
+  /** Delete all capability pack assets for a pack */
+  deleteCapabilityPackAssets(packId: string): void;
+}
+
 /** API for database initialization and lifecycle management */
 export interface DatabaseLifecycleAPI {
   /** Initialize the database, creating it if needed and running migrations */
@@ -262,6 +293,7 @@ export interface StorageAPI
     ProviderSettingsAPI,
     SecureStorageAPI,
     ConnectorStorageAPI,
+    CapabilityPackStorageAPI,
     DatabaseLifecycleAPI {}
 
 export type {
@@ -280,4 +312,7 @@ export type {
   McpConnector,
   ConnectorStatus,
   OAuthTokens,
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackStatus,
 };

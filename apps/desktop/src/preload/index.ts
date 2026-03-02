@@ -11,7 +11,15 @@ import type {
   Skill,
   TodoItem,
   McpConnector,
+  CapabilityPack,
+  CapabilityPackActionResult,
+  CapabilityPackInstallPreview,
+  CapabilityPackUpdateCheck,
   TaskConfig,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthReport,
+  LocalSetupStatus,
 } from '@accomplish_ai/agent-core';
 
 interface LlmfitModel {
@@ -44,26 +52,6 @@ interface LlmfitScanResult {
   error?: string;
 }
 
-interface LocalSetupStatus {
-  ollama: {
-    reachable: boolean;
-    baseUrl: string;
-    modelCount: number;
-    error?: string;
-  };
-  airllm: {
-    running: boolean;
-    serverUrl?: string;
-    modelId?: string | null;
-  };
-  llmfit: {
-    installed: boolean;
-  };
-  routing: {
-    activeEngine: 'ollama' | 'airllm';
-  };
-}
-
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
   // App info
@@ -79,6 +67,12 @@ const accomplishAPI = {
   llmfitScan: (useAirllmMemoryOverride?: boolean): Promise<LlmfitScanResult> =>
     ipcRenderer.invoke('llmfit:scan', useAirllmMemoryOverride),
   getLocalSetupStatus: (): Promise<LocalSetupStatus> => ipcRenderer.invoke('local:setup-status'),
+  getLocalHealthReport: (): Promise<LocalHealthReport> => ipcRenderer.invoke('local:health-report'),
+  getLocalRecentErrors: (): Promise<LocalErrorRecord[]> =>
+    ipcRenderer.invoke('local:get-recent-errors'),
+  clearLocalRecentErrors: (): Promise<void> => ipcRenderer.invoke('local:clear-recent-errors'),
+  exportLocalDiagnostics: (): Promise<{ path?: string; blob?: string }> =>
+    ipcRenderer.invoke('local:export-diagnostics'),
 
   // Task operations
   startTask: (config: TaskConfig): Promise<unknown> => ipcRenderer.invoke('task:start', config),
@@ -249,21 +243,11 @@ const accomplishAPI = {
     error?: string;
   }> => ipcRenderer.invoke('ollama:list-models', baseUrl),
 
-  ollamaPullModel: (
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{
-    success: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke('ollama:pull-model', modelName, baseUrl),
+  ollamaPullModel: (modelName: string, baseUrl?: string): Promise<LocalActionResult> =>
+    ipcRenderer.invoke('ollama:pull-model', modelName, baseUrl),
 
-  ollamaDeleteModel: (
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{
-    success: boolean;
-    error?: string;
-  }> => ipcRenderer.invoke('ollama:delete-model', modelName, baseUrl),
+  ollamaDeleteModel: (modelName: string, baseUrl?: string): Promise<LocalActionResult> =>
+    ipcRenderer.invoke('ollama:delete-model', modelName, baseUrl),
 
   onOllamaPullProgress: (
     callback: (data: {
@@ -289,14 +273,13 @@ const accomplishAPI = {
     modelId?: string | null;
   }> => ipcRenderer.invoke('airllm:status'),
 
-  airllmStart: (): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('airllm:start'),
-  airllmInstallDependencies: (): Promise<{ success: boolean; error?: string }> =>
+  airllmStart: (): Promise<LocalActionResult> => ipcRenderer.invoke('airllm:start'),
+  airllmInstallDependencies: (): Promise<LocalActionResult> =>
     ipcRenderer.invoke('airllm:install-deps'),
 
   airllmStop: (): Promise<void> => ipcRenderer.invoke('airllm:stop'),
 
-  airllmLoadModel: (modelId: string): Promise<{ success: boolean; error?: string }> =>
+  airllmLoadModel: (modelId: string): Promise<LocalActionResult> =>
     ipcRenderer.invoke('airllm:load-model', modelId),
 
   airllmServerUrl: (): Promise<{ url: string }> => ipcRenderer.invoke('airllm:server-url'),
@@ -623,6 +606,35 @@ const accomplishAPI = {
     ipcRenderer.invoke('skills:open-in-editor', filePath),
   showSkillInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('skills:show-in-folder', filePath),
+
+  // Capability packs
+  packsList: (): Promise<
+    Array<
+      CapabilityPack & {
+        skillCount: number;
+        connectorCount: number;
+      }
+    >
+  > => ipcRenderer.invoke('packs:list'),
+  packsPreviewFromGithub: (
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackInstallPreview>> =>
+    ipcRenderer.invoke('packs:preview-from-github', sourceUrl),
+  packsInstallFromGithub: (
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPack>> =>
+    ipcRenderer.invoke('packs:install-from-github', sourceUrl),
+  packsCheckUpdates: (
+    packId: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackUpdateCheck>> =>
+    ipcRenderer.invoke('packs:check-updates', packId),
+  packsUpdate: (packId: string): Promise<CapabilityPackActionResult<CapabilityPack>> =>
+    ipcRenderer.invoke('packs:update', packId),
+  packsUninstall: (
+    packId: string,
+  ): Promise<CapabilityPackActionResult<{ removedAssets: number }>> =>
+    ipcRenderer.invoke('packs:uninstall', packId),
+  packsGetAllowlist: (): Promise<string[]> => ipcRenderer.invoke('packs:get-allowlist'),
 
   // MCP Connectors
   getConnectors: (): Promise<McpConnector[]> => ipcRenderer.invoke('connectors:list'),

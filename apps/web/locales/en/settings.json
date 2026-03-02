@@ -209,6 +209,45 @@
       "switchToOllama": "Switch to Ollama localhost",
       "keepAirllm": "Keep AirLLM"
     },
+    "health": {
+      "title": "Local Health",
+      "routingStale": "Local routing is stale and needs remediation.",
+      "categories": {
+        "ready": "Ready",
+        "degraded": "Degraded",
+        "blocked": "Blocked",
+        "recovering": "Recovering"
+      },
+      "actions": {
+        "installAirllmDeps": "Install AirLLM dependencies",
+        "switchToOllama": "Switch to Ollama",
+        "fastSetupModel": "Install recommended model",
+        "refresh": "Recheck health"
+      }
+    },
+    "errorCodes": {
+      "AIRLLM_DEPS_MISSING": "AirLLM dependencies are missing.",
+      "AIRLLM_SERVER_UNREACHABLE": "AirLLM server is unreachable.",
+      "AIRLLM_MODEL_LOAD_FAILED": "AirLLM model load failed.",
+      "OLLAMA_UNREACHABLE": "Ollama is unreachable.",
+      "OLLAMA_WRONG_ENDPOINT": "Configured Ollama URL is not an Ollama endpoint.",
+      "OLLAMA_NO_MODELS": "No runnable Ollama models are installed.",
+      "FITLLM_UNAVAILABLE": "FitLLM is unavailable (fallback recommendations are active)."
+    },
+    "diagnostics": {
+      "title": "Diagnostics",
+      "subtitle": "Recent local reliability signals and export tools.",
+      "clearErrors": "Clear errors",
+      "export": "Export diagnostics",
+      "exporting": "Exporting...",
+      "exported": "Diagnostics exported: {{target}}",
+      "healthStatus": "Current local health",
+      "unavailable": "Unavailable",
+      "routing": "Routing: {{engine}} via {{endpoint}}",
+      "recentErrors": "Recent local errors",
+      "noErrors": "No recent local setup errors.",
+      "actionContext": "Action: {{action}}"
+    },
     "sources": {
       "fitllm": "FitLLM recommendation",
       "fallback": "Fallback recommendation"
@@ -283,6 +322,7 @@
     "providers": "Providers",
     "connectors": "Connectors",
     "skills": "Skills",
+    "packs": "Packs",
     "voiceInput": "Voice Input",
     "appearance": "Appearance",
     "about": "About"
@@ -318,6 +358,74 @@
     "disable": "Disable",
     "confirmDelete": "Click again to confirm",
     "delete": "Delete"
+  },
+  "packs": {
+    "description": "Import capability packs from allowlisted public GitHub forks. Install is SHA-pinned and imports only declared skills and connector presets.",
+    "allowlist": "Allowed owners: {{owners}}",
+    "disabled": "Capability packs are disabled by feature flag.",
+    "loading": "Loading packs...",
+    "empty": "No capability packs installed yet.",
+    "inputPlaceholder": "https://github.com/CxxxxDxxxF/MoneyPrinterV2",
+    "status": {
+      "installed": "Installed",
+      "updateAvailable": "Update available",
+      "error": "Error"
+    },
+    "card": {
+      "source": "Source",
+      "version": "Version",
+      "sha": "SHA",
+      "skills": "Skills",
+      "connectors": "Connectors"
+    },
+    "actions": {
+      "previewInstall": "Preview install",
+      "previewing": "Previewing...",
+      "refresh": "Refresh",
+      "checkUpdates": "Check updates",
+      "checking": "Checking...",
+      "update": "Update",
+      "updating": "Updating...",
+      "uninstall": "Uninstall",
+      "uninstalling": "Uninstalling...",
+      "cancel": "Cancel",
+      "install": "Install pack",
+      "installing": "Installing..."
+    },
+    "installDialog": {
+      "title": "Install Capability Pack",
+      "description": "Review the pinned commit and declared assets before installing.",
+      "source": "Source",
+      "ref": "Ref",
+      "sha": "Pinned SHA",
+      "skillsTitle": "Skills",
+      "connectorsTitle": "Connector presets",
+      "none": "None",
+      "defaultsNotice": "Imported skills and connectors stay disabled by default. Enable only what you want."
+    },
+    "errors": {
+      "generic": "Capability pack operation failed.",
+      "unavailable": "Capability pack APIs are unavailable in this build.",
+      "loadFailed": "Failed to load capability packs.",
+      "repoUrlRequired": "Enter a GitHub repository URL first.",
+      "previewFailed": "Failed to preview capability pack.",
+      "installFailed": "Failed to install capability pack.",
+      "updateCheckFailed": "Failed to check for updates.",
+      "updateFailed": "Failed to update capability pack.",
+      "uninstallFailed": "Failed to uninstall capability pack."
+    },
+    "errorCodes": {
+      "PACK_OWNER_NOT_ALLOWED": "This GitHub owner is not allowlisted.",
+      "PACK_MANIFEST_MISSING": "Manifest file ACCOMPLISH_PACK.yaml is missing.",
+      "PACK_MANIFEST_INVALID": "Manifest is invalid.",
+      "PACK_FETCH_FAILED": "Failed to fetch repository content from GitHub.",
+      "PACK_ASSET_INVALID": "One or more declared assets are invalid.",
+      "PACK_SKILL_CONFLICT": "Skill conflict detected with existing local skills.",
+      "PACK_CONNECTOR_CONFLICT": "Connector conflict detected with existing connectors.",
+      "PACK_CONNECTOR_CONNECTED_BLOCKS_UNINSTALL": "Disconnect pack connectors before uninstalling this pack.",
+      "PACK_NOT_FOUND": "Capability pack not found.",
+      "PACK_UPDATE_NOT_AVAILABLE": "No update is currently available."
+    }
   },
   "zai": {
     "region": "Region",

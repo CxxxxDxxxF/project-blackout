@@ -87,10 +87,29 @@ export type {
   ToolSupportStatus,
   ConnectedProvider,
   ProviderSettings,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthCategory,
+  LocalHealthReport,
+  LocalSetupErrorCode,
   LocalSetupStatus,
 } from './providerSettings.js';
 
 export type { SkillSource, Skill, SkillFrontmatter } from './skills.js';
+
+export type {
+  CapabilityPack,
+  CapabilityPackAsset,
+  CapabilityPackActionResult,
+  CapabilityPackAssetType,
+  CapabilityPackConnectorManifestEntry,
+  CapabilityPackErrorCode,
+  CapabilityPackInstallPreview,
+  CapabilityPackManifest,
+  CapabilityPackSkillManifestEntry,
+  CapabilityPackStatus,
+  CapabilityPackUpdateCheck,
+} from './capabilityPacks.js';
 
 export type {
   ConnectorStatus,

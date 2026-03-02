@@ -24,6 +24,13 @@ import type {
   ToolSupportStatus,
   Skill,
   McpConnector,
+  CapabilityPack,
+  CapabilityPackActionResult,
+  CapabilityPackInstallPreview,
+  CapabilityPackUpdateCheck,
+  LocalActionResult,
+  LocalErrorRecord,
+  LocalHealthReport,
   LocalSetupStatus,
 } from '@accomplish_ai/agent-core/common';
 
@@ -66,6 +73,10 @@ interface AccomplishAPI {
     error?: string;
   }>;
   getLocalSetupStatus(): Promise<LocalSetupStatus>;
+  getLocalHealthReport?(): Promise<LocalHealthReport>;
+  getLocalRecentErrors?(): Promise<LocalErrorRecord[]>;
+  clearLocalRecentErrors?(): Promise<void>;
+  exportLocalDiagnostics?(): Promise<{ path?: string; blob?: string }>;
 
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;
@@ -225,14 +236,8 @@ interface AccomplishAPI {
     }>;
     error?: string;
   }>;
-  ollamaPullModel(
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{ success: boolean; error?: string }>;
-  ollamaDeleteModel(
-    modelName: string,
-    baseUrl?: string,
-  ): Promise<{ success: boolean; error?: string }>;
+  ollamaPullModel(modelName: string, baseUrl?: string): Promise<LocalActionResult>;
+  ollamaDeleteModel(modelName: string, baseUrl?: string): Promise<LocalActionResult>;
   onOllamaPullProgress?(
     callback: (data: {
       model: string;
@@ -249,10 +254,10 @@ interface AccomplishAPI {
     modelLoaded?: boolean;
     modelId?: string | null;
   }>;
-  airllmStart(): Promise<{ success: boolean; error?: string }>;
-  airllmInstallDependencies(): Promise<{ success: boolean; error?: string }>;
+  airllmStart(): Promise<LocalActionResult>;
+  airllmInstallDependencies(): Promise<LocalActionResult>;
   airllmStop(): Promise<void>;
-  airllmLoadModel(modelId: string): Promise<{ success: boolean; error?: string }>;
+  airllmLoadModel(modelId: string): Promise<LocalActionResult>;
   airllmServerUrl(): Promise<{ url: string }>;
   airllmDownloadStatus(): Promise<{
     active: boolean;
@@ -467,6 +472,26 @@ interface AccomplishAPI {
   resyncSkills(): Promise<Skill[]>;
   openSkillInEditor(filePath: string): Promise<void>;
   showSkillInFolder(filePath: string): Promise<void>;
+
+  // Capability Packs
+  packsList?(): Promise<
+    Array<
+      CapabilityPack & {
+        skillCount: number;
+        connectorCount: number;
+      }
+    >
+  >;
+  packsPreviewFromGithub?(
+    sourceUrl: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackInstallPreview>>;
+  packsInstallFromGithub?(sourceUrl: string): Promise<CapabilityPackActionResult<CapabilityPack>>;
+  packsCheckUpdates?(
+    packId: string,
+  ): Promise<CapabilityPackActionResult<CapabilityPackUpdateCheck>>;
+  packsUpdate?(packId: string): Promise<CapabilityPackActionResult<CapabilityPack>>;
+  packsUninstall?(packId: string): Promise<CapabilityPackActionResult<{ removedAssets: number }>>;
+  packsGetAllowlist?(): Promise<string[]>;
 
   // MCP Connectors
   getConnectors(): Promise<McpConnector[]>;
