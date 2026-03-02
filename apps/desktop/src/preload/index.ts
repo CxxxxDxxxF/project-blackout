@@ -44,6 +44,26 @@ interface LlmfitScanResult {
   error?: string;
 }
 
+interface LocalSetupStatus {
+  ollama: {
+    reachable: boolean;
+    baseUrl: string;
+    modelCount: number;
+    error?: string;
+  };
+  airllm: {
+    running: boolean;
+    serverUrl?: string;
+    modelId?: string | null;
+  };
+  llmfit: {
+    installed: boolean;
+  };
+  routing: {
+    activeEngine: 'ollama' | 'airllm';
+  };
+}
+
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
   // App info
@@ -58,6 +78,7 @@ const accomplishAPI = {
 
   llmfitScan: (useAirllmMemoryOverride?: boolean): Promise<LlmfitScanResult> =>
     ipcRenderer.invoke('llmfit:scan', useAirllmMemoryOverride),
+  getLocalSetupStatus: (): Promise<LocalSetupStatus> => ipcRenderer.invoke('local:setup-status'),
 
   // Task operations
   startTask: (config: TaskConfig): Promise<unknown> => ipcRenderer.invoke('task:start', config),
@@ -270,6 +291,8 @@ const accomplishAPI = {
 
   airllmStart: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('airllm:start'),
+  airllmInstallDependencies: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('airllm:install-deps'),
 
   airllmStop: (): Promise<void> => ipcRenderer.invoke('airllm:stop'),
 
@@ -287,6 +310,19 @@ const accomplishAPI = {
     percent?: number | null;
     etaSeconds?: number | null;
   }> => ipcRenderer.invoke('airllm:download-status'),
+  onAirllmInstallProgress: (
+    callback: (data: {
+      phase: 'starting' | 'installing' | 'completed' | 'error';
+      message: string;
+    }) => void,
+  ) => {
+    const listener = (
+      _: unknown,
+      data: { phase: 'starting' | 'installing' | 'completed' | 'error'; message: string },
+    ) => callback(data);
+    ipcRenderer.on('airllm:install-progress', listener);
+    return () => ipcRenderer.removeListener('airllm:install-progress', listener);
+  },
 
   getAzureFoundryConfig: (): Promise<{
     baseUrl: string;

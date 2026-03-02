@@ -79,6 +79,7 @@ export type {
   ToolSupportStatus,
   ConnectedProvider,
   ProviderSettings,
+  LocalSetupStatus,
 } from './common/types/providerSettings.js';
 export {
   PROVIDER_META,

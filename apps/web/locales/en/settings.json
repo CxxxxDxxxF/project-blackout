@@ -169,6 +169,51 @@
     "helpText": "Make sure <link>Ollama</link> is installed and running, then click Test to connect.",
     "currentlyUsing": "Currently using"
   },
+  "localSetup": {
+    "title": "Local Models Setup",
+    "subtitle": "Fastest way to get Ollama, FitLLM recommendations, and AirLLM working together.",
+    "advancedOptions": "Advanced options",
+    "noModelsConnected": "Connected to Ollama, but no local models were found yet. Use Local Model Manager below to pull your first model, then select it here.",
+    "recommendedTitle": "Recommended Models",
+    "ollamaUnreachable": "Ollama is not reachable. Start it first, then reconnect.",
+    "fitllmMissing": "FitLLM is not installed. Showing safe fallback recommendations.",
+    "airllmFallback": "Ollama path is currently unavailable. You can still run with AirLLM.",
+    "airllmRunning": "AirLLM server is running.",
+    "airllmStopped": "Start AirLLM in Advanced options to use this fallback.",
+    "steps": {
+      "detectOllama": "Detect Ollama availability",
+      "connectEndpoint": "Connect/Test local endpoint",
+      "ensureModel": "Ensure at least one runnable model",
+      "ready": "Ready to use"
+    },
+    "stepStatus": {
+      "pending": "Pending",
+      "running": "Checking",
+      "done": "Done",
+      "error": "Needs attention"
+    },
+    "advancedGuide": {
+      "install": "1. Install Ollama from https://ollama.com/download",
+      "startServer": "2. Start server:",
+      "pullModel": "3. Download first model:",
+      "connect": "4. Keep URL as http://localhost:11434 and click Connect."
+    },
+    "actions": {
+      "fastSetup": "Set up fastest local path",
+      "working": "Working...",
+      "installToOllama": "Install to Ollama",
+      "loadWithAirllm": "Load with AirLLM"
+    },
+    "routing": {
+      "airllmActive": "Local routing currently uses AirLLM at {{url}}.",
+      "switchToOllama": "Switch to Ollama localhost",
+      "keepAirllm": "Keep AirLLM"
+    },
+    "sources": {
+      "fitllm": "FitLLM recommendation",
+      "fallback": "Fallback recommendation"
+    }
+  },
   "azure": {
     "apiKey": "API Key",
     "entraId": "Entra ID",

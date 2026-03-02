@@ -228,6 +228,26 @@ export interface ProviderSettings {
   debugMode: boolean;
 }
 
+export interface LocalSetupStatus {
+  ollama: {
+    reachable: boolean;
+    baseUrl: string;
+    modelCount: number;
+    error?: string;
+  };
+  airllm: {
+    running: boolean;
+    serverUrl?: string;
+    modelId?: string | null;
+  };
+  llmfit: {
+    installed: boolean;
+  };
+  routing: {
+    activeEngine: 'ollama' | 'airllm';
+  };
+}
+
 export function isProviderReady(provider: ConnectedProvider | undefined): boolean {
   if (!provider) return false;
   return provider.connectionStatus === 'connected' && provider.selectedModelId !== null;

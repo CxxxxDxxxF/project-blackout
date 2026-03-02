@@ -91,6 +91,7 @@ import type {
   LMStudioConfig,
   SwarmChildSummary,
   SwarmRunChildInput,
+  LocalSetupStatus,
 } from '@accomplish_ai/agent-core';
 import {
   DEFAULT_PROVIDERS,
@@ -244,6 +245,24 @@ function handle<Args extends unknown[], ReturnType = unknown>(
 const DEFAULT_SWARM_MAX_AGENTS = 3;
 const DEFAULT_SWARM_CHILD_TIMEOUT_MS = 10 * 60 * 1000;
 const activeSwarmChildren = new Map<string, Set<string>>();
+const SWARM_PROMPT_PATTERNS = [
+  /\bsub[- ]?agents?\b/i,
+  /\bswarm\b/i,
+  /\bparallel agents?\b/i,
+  /^\s*\/swarm\b/i,
+];
+
+function shouldAutoEnableSwarm(prompt: string): boolean {
+  const normalized = prompt.trim();
+  if (!normalized) {
+    return false;
+  }
+  return SWARM_PROMPT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function stripSwarmDirective(prompt: string): string {
+  return prompt.replace(/^\s*\/swarm\b[:\s-]*/i, '').trim();
+}
 
 function isTransientChildError(error: string): boolean {
   return (
@@ -379,6 +398,11 @@ export function registerIPCHandlers(): void {
     const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
     const sender = event.sender;
     const validatedConfig = validateTaskConfig(config);
+    const autoSwarmRequested = shouldAutoEnableSwarm(validatedConfig.prompt);
+    const strippedPrompt = stripSwarmDirective(validatedConfig.prompt);
+    if (strippedPrompt) {
+      validatedConfig.prompt = strippedPrompt;
+    }
 
     if (!isMockTaskEventsEnabled() && !storage.hasReadyProvider()) {
       throw new Error(
@@ -430,10 +454,12 @@ export function registerIPCHandlers(): void {
       timestamp: new Date().toISOString(),
     };
 
+    const isSwarmGloballyEnabled =
+      typeof storage.getSwarmEnabled === 'function' ? storage.getSwarmEnabled() : false;
     const swarmEnabled =
-      Boolean(validatedConfig.swarm?.enabled) &&
-      storage.getSwarmEnabled() &&
-      !isMockTaskEventsEnabled();
+      isSwarmGloballyEnabled &&
+      !isMockTaskEventsEnabled() &&
+      (validatedConfig.swarm?.enabled === true || autoSwarmRequested);
 
     if (swarmEnabled) {
       const task = {
@@ -991,6 +1017,56 @@ export function registerIPCHandlers(): void {
     return runLlmfit(useAirllmMemoryOverride);
   });
 
+  handle('local:setup-status', async (_event: IpcMainInvokeEvent): Promise<LocalSetupStatus> => {
+    const ollamaBaseUrl = storage.getOllamaConfig()?.baseUrl || 'http://localhost:11434';
+    const airllmServerUrl = 'http://127.0.0.1:11435';
+    const airllmStatus = getAirLLMServer().getStatus();
+    const llmfit = await checkLlmfitInstalled();
+
+    let ollamaReachable = false;
+    let modelCount = 0;
+    let ollamaError: string | undefined;
+
+    try {
+      ollamaReachable = await isOllamaReachable(ollamaBaseUrl);
+      if (ollamaReachable) {
+        const res = await fetch(`${ollamaBaseUrl.replace(/\/+$/, '')}/api/tags`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const payload = (await res.json()) as { models?: Array<unknown> };
+          modelCount = payload.models?.length ?? 0;
+        } else {
+          ollamaError = `Ollama returned status ${res.status}`;
+        }
+      } else {
+        ollamaError = `Cannot reach Ollama at ${ollamaBaseUrl}`;
+      }
+    } catch (err) {
+      ollamaError = err instanceof Error ? err.message : 'Failed to check Ollama status';
+    }
+
+    return {
+      ollama: {
+        reachable: ollamaReachable,
+        baseUrl: ollamaBaseUrl,
+        modelCount,
+        error: ollamaError,
+      },
+      airllm: {
+        running: airllmStatus.running,
+        serverUrl: airllmServerUrl,
+        modelId: airllmStatus.modelId ?? null,
+      },
+      llmfit: {
+        installed: llmfit.installed,
+      },
+      routing: {
+        activeEngine: ollamaBaseUrl === airllmServerUrl ? 'airllm' : 'ollama',
+      },
+    };
+  });
+
   handle('bedrock:save', async (_event: IpcMainInvokeEvent, credentials: string) => {
     const parsed = JSON.parse(credentials);
 
@@ -1282,6 +1358,26 @@ export function registerIPCHandlers(): void {
 
   handle('airllm:start', async (_event: IpcMainInvokeEvent) => {
     return getAirLLMServer().start();
+  });
+
+  handle('airllm:install-deps', async (event: IpcMainInvokeEvent) => {
+    event.sender.send('airllm:install-progress', {
+      phase: 'starting',
+      message: 'Starting AirLLM dependency installation...',
+    });
+    const result = await getAirLLMServer().installDependencies((line) => {
+      event.sender.send('airllm:install-progress', {
+        phase: 'installing',
+        message: line,
+      });
+    });
+    event.sender.send('airllm:install-progress', {
+      phase: result.success ? 'completed' : 'error',
+      message: result.success
+        ? 'AirLLM dependencies installed successfully.'
+        : result.error || 'AirLLM dependency installation failed.',
+    });
+    return result;
   });
 
   handle('airllm:stop', async (_event: IpcMainInvokeEvent) => {

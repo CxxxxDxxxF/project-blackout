@@ -169,6 +169,51 @@
     "helpText": "请确保已安装并运行 <link>Ollama</link>，然后点击测试连接。",
     "currentlyUsing": "当前使用"
   },
+  "localSetup": {
+    "title": "本地模型设置",
+    "subtitle": "用最快方式完成 Ollama、FitLLM 推荐和 AirLLM 联动。",
+    "advancedOptions": "高级选项",
+    "noModelsConnected": "已连接到 Ollama，但尚未发现本地模型。请在下方“本地模型管理器”中拉取第一个模型，然后在这里选择。",
+    "recommendedTitle": "推荐模型",
+    "ollamaUnreachable": "无法连接到 Ollama。请先启动后再连接。",
+    "fitllmMissing": "未安装 FitLLM，当前显示安全兜底推荐。",
+    "airllmFallback": "当前 Ollama 路径不可用，您仍可使用 AirLLM。",
+    "airllmRunning": "AirLLM 服务正在运行。",
+    "airllmStopped": "请在高级选项中启动 AirLLM 以使用此兜底方案。",
+    "steps": {
+      "detectOllama": "检测 Ollama 可用性",
+      "connectEndpoint": "连接/测试本地端点",
+      "ensureModel": "确保至少有一个可运行模型",
+      "ready": "可以开始使用"
+    },
+    "stepStatus": {
+      "pending": "待处理",
+      "running": "检查中",
+      "done": "已完成",
+      "error": "需要处理"
+    },
+    "advancedGuide": {
+      "install": "1. 从 https://ollama.com/download 安装 Ollama",
+      "startServer": "2. 启动服务：",
+      "pullModel": "3. 下载第一个模型：",
+      "connect": "4. 保持 URL 为 http://localhost:11434，然后点击连接。"
+    },
+    "actions": {
+      "fastSetup": "一键快速本地设置",
+      "working": "处理中...",
+      "installToOllama": "安装到 Ollama",
+      "loadWithAirllm": "使用 AirLLM 加载"
+    },
+    "routing": {
+      "airllmActive": "当前本地路由使用 AirLLM：{{url}}。",
+      "switchToOllama": "切换到 Ollama localhost",
+      "keepAirllm": "继续使用 AirLLM"
+    },
+    "sources": {
+      "fitllm": "FitLLM 推荐",
+      "fallback": "兜底推荐"
+    }
+  },
   "bedrock": {
     "accessKeys": "访问密钥",
     "awsProfile": "AWS 配置文件",

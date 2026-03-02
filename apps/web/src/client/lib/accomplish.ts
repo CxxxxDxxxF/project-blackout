@@ -24,6 +24,7 @@ import type {
   ToolSupportStatus,
   Skill,
   McpConnector,
+  LocalSetupStatus,
 } from '@accomplish_ai/agent-core/common';
 
 // Define the API interface
@@ -64,6 +65,7 @@ interface AccomplishAPI {
     };
     error?: string;
   }>;
+  getLocalSetupStatus(): Promise<LocalSetupStatus>;
 
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;
@@ -248,6 +250,7 @@ interface AccomplishAPI {
     modelId?: string | null;
   }>;
   airllmStart(): Promise<{ success: boolean; error?: string }>;
+  airllmInstallDependencies(): Promise<{ success: boolean; error?: string }>;
   airllmStop(): Promise<void>;
   airllmLoadModel(modelId: string): Promise<{ success: boolean; error?: string }>;
   airllmServerUrl(): Promise<{ url: string }>;
@@ -261,6 +264,12 @@ interface AccomplishAPI {
     percent?: number | null;
     etaSeconds?: number | null;
   }>;
+  onAirllmInstallProgress?(
+    callback: (data: {
+      phase: 'starting' | 'installing' | 'completed' | 'error';
+      message: string;
+    }) => void,
+  ): () => void;
 
   getAzureFoundryConfig(): Promise<{
     baseUrl: string;
