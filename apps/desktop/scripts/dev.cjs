@@ -18,7 +18,9 @@ if (isClean) {
 }
 
 try {
-  runNodeScript('patch-electron-name.cjs', env);
+  if (process.env.ACCOMPLISH_PATCH_ELECTRON_NAME === '1') {
+    runNodeScript('patch-electron-name.cjs', env);
+  }
   ensureNativeModules(env);
 
   if (!isCheck) {

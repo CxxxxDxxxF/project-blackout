@@ -6,6 +6,13 @@ function normalizeHost(domain: string): string {
     return trimmed;
   }
 
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.hostname.toLowerCase();
+  } catch {
+    // Fall through to legacy normalization.
+  }
+
   if (trimmed.startsWith('[') && trimmed.includes(']')) {
     return trimmed.slice(1, trimmed.indexOf(']'));
   }
@@ -39,9 +46,10 @@ function isLocalOrPrivateHost(host: string): boolean {
 }
 
 export function getDomainFaviconSrc(domain: string, size: number): string {
+  void size;
   const host = normalizeHost(domain);
   if (!host || isLocalOrPrivateHost(host)) {
     return accomplishFavicon;
   }
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`;
+  return `https://${host}/favicon.ico`;
 }

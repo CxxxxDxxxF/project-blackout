@@ -9,15 +9,25 @@ import { getAccomplish } from '@/lib/accomplish';
 import { staggerContainer } from '@/lib/animations';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import ConversationListItem from './ConversationListItem';
 import SettingsDialog from './SettingsDialog';
-import { Gear, ChatText, MagnifyingGlass } from '@phosphor-icons/react';
+import { Gear, ChatText, MagnifyingGlass, Trash, WarningCircle } from '@phosphor-icons/react';
 import logoImage from '/assets/logo-1.png';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
-  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher } = useTaskStore();
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher, deleteTask } = useTaskStore();
   const accomplish = getAccomplish();
   const { t } = useTranslation('sidebar');
 
@@ -25,8 +35,7 @@ export default function Sidebar() {
     loadTasks();
   }, [loadTasks]);
 
-  // Subscribe to task status changes (queued -> running) and task updates (complete/error)
-  // This ensures sidebar always reflects current task status
+  // Subscribe to task status changes and task updates so the sidebar reflects live state
   useEffect(() => {
     const unsubscribeStatusChange = accomplish.onTaskStatusChange?.((data) => {
       updateTaskStatus(data.taskId, data.status);
@@ -45,6 +54,23 @@ export default function Sidebar() {
   const handleNewConversation = () => {
     navigate('/');
   };
+
+  const handleConfirmClearAll = async () => {
+    setIsClearing(true);
+    const toDelete = tasks.filter(
+      (t) => t.status !== 'running' && t.status !== 'waiting_permission',
+    );
+    for (const task of toDelete) {
+      await deleteTask(task.id);
+    }
+    setIsClearing(false);
+    setShowClearDialog(false);
+    navigate('/');
+  };
+
+  const deletableCount = tasks.filter(
+    (t) => t.status !== 'running' && t.status !== 'waiting_permission',
+  ).length;
 
   return (
     <>
@@ -71,6 +97,17 @@ export default function Sidebar() {
           >
             <MagnifyingGlass className="h-4 w-4" />
           </Button>
+          {tasks.length > 0 && (
+            <Button
+              onClick={() => setShowClearDialog(true)}
+              variant="outline"
+              size="sm"
+              className="px-2 text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors duration-200"
+              title="Clear all chat history"
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Conversation List */}
@@ -106,7 +143,6 @@ export default function Sidebar() {
 
         {/* Bottom Section - Logo and Settings */}
         <div className="px-3 py-4 border-t border-border flex items-center justify-between">
-          {/* Logo - Bottom Left */}
           <div className="flex items-center">
             <img
               src={logoImage}
@@ -115,8 +151,6 @@ export default function Sidebar() {
               style={{ height: '20px', paddingLeft: '6px' }}
             />
           </div>
-
-          {/* Settings Button - Bottom Right */}
           <Button
             data-testid="sidebar-settings-button"
             variant="ghost"
@@ -128,6 +162,50 @@ export default function Sidebar() {
           </Button>
         </div>
       </div>
+
+      {/* Clear All History Confirmation Dialog */}
+      <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 shrink-0">
+                <WarningCircle className="h-5 w-5 text-destructive" weight="fill" />
+              </div>
+              <DialogTitle>Clear all chat history?</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
+              This will permanently delete{' '}
+              <span className="font-semibold text-foreground">
+                {deletableCount} chat{deletableCount !== 1 ? 's' : ''}
+              </span>
+              . Any currently running tasks will be left intact.
+              <br />
+              <span className="text-destructive/80 font-medium">This cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowClearDialog(false)}
+              disabled={isClearing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmClearAll}
+              disabled={isClearing}
+              className="gap-2"
+            >
+              {isClearing ? (
+                <>Clearing...</>
+              ) : (
+                <><Trash className="h-4 w-4" />Clear All</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
     </>

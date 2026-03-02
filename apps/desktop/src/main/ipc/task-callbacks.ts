@@ -20,6 +20,13 @@ const BROWSER_CONNECTION_ERROR_PATTERNS = [
   /Session closed/i,
   /Page closed/i,
 ];
+const MAX_BATCH_MESSAGES = 40;
+const MAX_MESSAGE_CONTENT_CHARS = 12000;
+const MAX_TOOL_INPUT_CHARS = 8000;
+const MAX_PROGRESS_MESSAGE_CHARS = 1000;
+const MAX_ERROR_MESSAGE_CHARS = 2000;
+const MAX_DEBUG_MESSAGE_CHARS = 2000;
+const MAX_DEBUG_DATA_CHARS = 4000;
 
 function isDevBrowserToolCall(toolName: string): boolean {
   return DEV_BROWSER_TOOL_PREFIXES.some((prefix) => toolName.startsWith(prefix));
@@ -40,6 +47,62 @@ export interface TaskCallbacksOptions {
   taskId: string;
   window: BrowserWindow;
   sender: Electron.WebContents;
+}
+
+function truncate(value: string | undefined, maxChars: number): string | undefined {
+  if (!value) {
+    return value;
+  }
+  if (value.length <= maxChars) {
+    return value;
+  }
+  return `${value.slice(0, maxChars)}\n...[truncated ${value.length - maxChars} chars]`;
+}
+
+function sanitizeTaskMessage(message: TaskMessage): TaskMessage {
+  let sanitizedToolInput = message.toolInput;
+  if (sanitizedToolInput !== undefined) {
+    try {
+      const raw = JSON.stringify(sanitizedToolInput);
+      if (raw.length > MAX_TOOL_INPUT_CHARS) {
+        sanitizedToolInput = {
+          truncated: true,
+          preview: `${raw.slice(0, MAX_TOOL_INPUT_CHARS)}...[truncated ${raw.length - MAX_TOOL_INPUT_CHARS} chars]`,
+        };
+      }
+    } catch {
+      sanitizedToolInput = '[unserializable tool input]';
+    }
+  }
+
+  return {
+    ...message,
+    content: truncate(message.content, MAX_MESSAGE_CONTENT_CHARS) || '',
+    toolInput: sanitizedToolInput,
+  };
+}
+
+function sanitizeTaskMessageForRenderer(message: TaskMessage): TaskMessage {
+  const sanitized = sanitizeTaskMessage(message);
+  return {
+    ...sanitized,
+    // Attachment payloads (especially screenshots) can be large enough to
+    // overwhelm structured cloning in renderer IPC. Persist originals in
+    // storage, but stream text-only messages to renderer.
+    attachments: undefined,
+    // Tool input can also contain huge payloads (snapshots/DOM); omit it from
+    // live renderer updates.
+    toolInput: undefined,
+  };
+}
+
+function isRecoverablePersistError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = 'code' in error ? String((error as { code?: unknown }).code) : '';
+  const message = 'message' in error ? String((error as { message?: unknown }).message) : '';
+  return code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || /FOREIGN KEY constraint failed/i.test(message);
 }
 
 export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallbacks {
@@ -79,9 +142,23 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
 
   return {
     onBatchedMessages: (messages: TaskMessage[]) => {
-      forwardToRenderer('task:update:batch', { taskId, messages });
-      for (const msg of messages) {
-        storage.addTaskMessage(taskId, msg);
+      const boundedMessages = messages.slice(Math.max(0, messages.length - MAX_BATCH_MESSAGES));
+      const sanitizedForRenderer = boundedMessages.map(sanitizeTaskMessageForRenderer);
+      const sanitizedForStorage = boundedMessages.map(sanitizeTaskMessage);
+      forwardToRenderer('task:update:batch', { taskId, messages: sanitizedForRenderer });
+      for (const msg of sanitizedForStorage) {
+        try {
+          storage.addTaskMessage(taskId, msg);
+        } catch (error) {
+          if (isRecoverablePersistError(error)) {
+            console.warn('[TaskCallbacks] Skipping persist for message after task teardown', {
+              taskId,
+              messageId: msg.id,
+            });
+            continue;
+          }
+          throw error;
+        }
       }
     },
 
@@ -89,6 +166,7 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
       forwardToRenderer('task:progress', {
         taskId,
         ...progress,
+        message: truncate(progress.message, MAX_PROGRESS_MESSAGE_CHARS),
       });
     },
 
@@ -120,7 +198,7 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
       forwardToRenderer('task:update', {
         taskId,
         type: 'error',
-        error: error.message,
+        error: truncate(error.message, MAX_ERROR_MESSAGE_CHARS),
       });
 
       storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
@@ -128,10 +206,25 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
 
     onDebug: (log: { type: string; message: string; data?: unknown }) => {
       if (storage.getDebugMode()) {
+        const debugData =
+          log.data === undefined
+            ? undefined
+            : truncate(
+                (() => {
+                  try {
+                    return JSON.stringify(log.data);
+                  } catch {
+                    return String(log.data);
+                  }
+                })(),
+                MAX_DEBUG_DATA_CHARS,
+              );
         forwardToRenderer('debug:log', {
           taskId,
           timestamp: new Date().toISOString(),
-          ...log,
+          type: log.type,
+          message: truncate(log.message, MAX_DEBUG_MESSAGE_CHARS) || '',
+          data: debugData,
         });
       }
     },

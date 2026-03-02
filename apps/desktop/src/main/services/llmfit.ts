@@ -61,129 +61,127 @@ interface RawLlmfitOutput {
   system?: RawLlmfitSystem;
 }
 
-export async function checkLlmfitInstalled(): Promise<{ installed: boolean; version?: string }> {
+function getLlmfitCandidates(): string[] {
+  const home = os.homedir();
+  const candidates = new Set<string>();
+  const exe = process.platform === 'win32' ? 'llmfit.exe' : 'llmfit';
+
+  // Prefer command lookup first (PATH on all platforms).
+  candidates.add(exe);
+  candidates.add('llmfit');
+
+  // Common user-local install locations.
+  candidates.add(path.join(home, '.local', 'bin', 'llmfit'));
+  candidates.add(path.join(home, '.local', 'bin', 'llmfit.exe'));
+
+  if (process.platform === 'win32') {
+    const userProfile = process.env.USERPROFILE ?? home;
+    const localAppData =
+      process.env.LOCALAPPDATA ?? path.join(userProfile, 'AppData', 'Local');
+    const appData = process.env.APPDATA ?? path.join(userProfile, 'AppData', 'Roaming');
+    const pythonVersions = ['Python313', 'Python312', 'Python311', 'Python310', 'Python39'];
+
+    for (const py of pythonVersions) {
+      candidates.add(path.join(localAppData, 'Programs', 'Python', py, 'Scripts', 'llmfit.exe'));
+      candidates.add(path.join(appData, 'Python', py, 'Scripts', 'llmfit.exe'));
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+function getEnvWithUserLocalBin(): NodeJS.ProcessEnv {
+  const userLocalBin = path.join(os.homedir(), '.local', 'bin');
+  const delimiter = path.delimiter;
+  const existingPath = process.env.PATH ?? '';
+  const mergedPath = existingPath.includes(userLocalBin)
+    ? existingPath
+    : `${existingPath}${existingPath ? delimiter : ''}${userLocalBin}`;
+  return {
+    ...process.env,
+    PATH: mergedPath,
+  };
+}
+
+function runLlmfitCommand(
+  args: string[],
+): Promise<{ ok: true; stdout: string } | { ok: false; error: string }> {
+  const candidates = getLlmfitCandidates();
+  const env = getEnvWithUserLocalBin();
+
   return new Promise((resolve) => {
-    // We explicitly check ~/.local/bin/llmfit because the install script puts it there without sudo
-    const binPath = path.join(os.homedir(), '.local', 'bin', 'llmfit');
-    const child = spawn(binPath, ['--version'], {
-      env: {
-        ...process.env,
-        PATH: `${process.env.PATH}:${path.join(os.homedir(), '.local', 'bin')}`,
-      },
-    });
-
-    let stdout = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.on('error', () => {
-      // Try global llmfit next if the local bin failed
-      const fallbackChild = spawn('llmfit', ['--version']);
-
-      let fallbackStdout = '';
-      fallbackChild.stdout.on('data', (data) => {
-        fallbackStdout += data.toString();
-      });
-
-      fallbackChild.on('error', () => resolve({ installed: false }));
-      fallbackChild.on('close', (code) => {
-        if (code === 0) {
-          resolve({ installed: true, version: fallbackStdout.trim().replace('llmfit', '').trim() });
-        } else {
-          resolve({ installed: false });
-        }
-      });
-    });
-
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve({ installed: true, version: stdout.trim().replace('llmfit', '').trim() });
-      } else {
-        resolve({ installed: false });
+    const tryAt = (index: number) => {
+      if (index >= candidates.length) {
+        resolve({ ok: false, error: 'llmfit binary not found on PATH' });
+        return;
       }
-    });
+
+      const bin = candidates[index];
+      const child = spawn(bin, args, { env });
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('error', () => {
+        tryAt(index + 1);
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ ok: true, stdout });
+          return;
+        }
+        if (code === 127 && index + 1 < candidates.length) {
+          tryAt(index + 1);
+          return;
+        }
+        resolve({
+          ok: false,
+          error: stderr.trim() || `llmfit exited with code ${code ?? 'unknown'}`,
+        });
+      });
+    };
+
+    tryAt(0);
   });
 }
 
+export async function checkLlmfitInstalled(): Promise<{ installed: boolean; version?: string }> {
+  const result = await runLlmfitCommand(['--version']);
+  if (!result.ok) {
+    return { installed: false };
+  }
+  return { installed: true, version: result.stdout.trim().replace('llmfit', '').trim() };
+}
+
 export async function runLlmfit(useAirllmMemoryProvider?: boolean): Promise<LlmfitScanResult> {
-  return new Promise((resolve) => {
-    const binPath = path.join(os.homedir(), '.local', 'bin', 'llmfit');
-    const args = ['--json', 'recommend'];
-    if (useAirllmMemoryProvider) {
-      args.unshift('--memory', '512G');
-    }
+  const args = ['--json', 'recommend'];
+  if (useAirllmMemoryProvider) {
+    args.unshift('--memory', '512G');
+  }
 
-    const child = spawn(binPath, args, {
-      env: {
-        ...process.env,
-        PATH: `${process.env.PATH}:${path.join(os.homedir(), '.local', 'bin')}`,
-      },
-    });
+  const result = await runLlmfitCommand(args);
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
 
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('error', () => {
-      // Try global fallback
-      const fallbackArgs = ['--json', 'recommend'];
-      if (useAirllmMemoryProvider) {
-        fallbackArgs.unshift('--memory', '512G');
-      }
-      const fallbackChild = spawn('llmfit', fallbackArgs);
-      let fbStdout = '';
-      let fbStderr = '';
-
-      fallbackChild.stdout.on('data', (data) => (fbStdout += data.toString()));
-      fallbackChild.stderr.on('data', (data) => (fbStderr += data.toString()));
-
-      fallbackChild.on('error', (fbErr) => resolve({ success: false, error: fbErr.message }));
-      fallbackChild.on('close', (code) => {
-        if (code !== 0) {
-          return resolve({ success: false, error: fbStderr || 'Unknown error' });
-        }
-        try {
-          const raw = JSON.parse(fbStdout) as RawLlmfitOutput;
-          resolve({
-            success: true,
-            models: mapModels(raw.models),
-            hardware: mapHardware(raw.system),
-          });
-        } catch {
-          resolve({ success: false, error: 'Failed to parse JSON output' });
-        }
-      });
-    });
-
-    child.on('close', (code) => {
-      if (code !== 0 && !stderr) {
-        // error handler already fired fallback
-        return;
-      }
-      if (code !== 0) {
-        return resolve({ success: false, error: stderr || 'Unknown error' });
-      }
-      try {
-        const raw = JSON.parse(stdout) as RawLlmfitOutput;
-        resolve({
-          success: true,
-          models: mapModels(raw.models),
-          hardware: mapHardware(raw.system),
-        });
-      } catch {
-        resolve({ success: false, error: 'Failed to parse JSON output' });
-      }
-    });
-  });
+  try {
+    const raw = JSON.parse(result.stdout) as RawLlmfitOutput;
+    return {
+      success: true,
+      models: mapModels(raw.models),
+      hardware: mapHardware(raw.system),
+    };
+  } catch {
+    return { success: false, error: 'Failed to parse JSON output' };
+  }
 }
 
 function mapModels(models: RawLlmfitModel[] = []): LlmfitModel[] {

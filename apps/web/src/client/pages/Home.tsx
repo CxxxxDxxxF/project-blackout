@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { TaskInputBar } from '@/components/landing/TaskInputBar';
+import { AnalogClock } from '@/components/landing/AnalogClock';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useTaskStore } from '@/stores/taskStore';
 import { getAccomplish } from '@/lib/accomplish';
@@ -28,6 +29,12 @@ const USE_CASE_KEYS = [
   { key: 'internProjectScoping', icons: ['notion.so', 'sheets.google.com'] },
   { key: 'internBugBash', icons: ['github.com', 'sheets.google.com'] },
   { key: 'internDemoPrep', icons: ['slides.google.com', 'docs.google.com'] },
+] as const;
+
+const SWARM_PREVIEW_AGENTS = [
+  { role: 'Researcher', task: 'Gather context and sources' },
+  { role: 'Coder', task: 'Implement and iterate changes' },
+  { role: 'Reviewer', task: 'Validate quality and regressions' },
 ] as const;
 
 export function HomePage() {
@@ -230,16 +237,19 @@ export function HomePage() {
 
       <div className="h-full flex flex-col bg-accent relative overflow-hidden">
         <div className="flex-1 overflow-y-auto p-6 pb-0">
-          <div className="w-full max-w-[720px] mx-auto flex flex-col items-center gap-3">
-            <motion.h1
-              data-testid="home-title"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={springs.gentle}
-              className="font-apparat text-[32px] tracking-[-0.015em] text-foreground w-full text-center pt-[250px]"
-            >
-              {userName.trim() ? `Welcome back, ${userName.trim()}` : t('title')}
-            </motion.h1>
+          <div className="relative w-full max-w-[720px] mx-auto flex flex-col items-center gap-3">
+            <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 pt-[220px]">
+              <motion.h1
+                data-testid="home-title"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={springs.gentle}
+                className="font-apparat text-[32px] tracking-[-0.015em] text-foreground text-center"
+              >
+                {userName.trim() ? `Welcome back, ${userName.trim()}` : t('title')}
+              </motion.h1>
+              <AnalogClock size="lg" className="shrink-0" />
+            </div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -287,6 +297,40 @@ export function HomePage() {
                 }
               />
             </motion.div>
+
+            <AnimatePresence>
+              {swarmFeatureEnabled && swarmModeEnabled && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 12 }}
+                  transition={{ duration: 0.2 }}
+                  data-testid="swarm-preview-popup"
+                  className="z-10 w-full rounded-xl border border-primary/40 bg-background/95 p-3 shadow-xl backdrop-blur-md"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">Swarm Agents Ready</p>
+                    <span className="whitespace-nowrap rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                      Local orchestration
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {SWARM_PREVIEW_AGENTS.map((agent) => (
+                      <div
+                        key={agent.role}
+                        data-testid={`swarm-preview-agent-${agent.role.toLowerCase()}`}
+                        className="rounded-lg border border-border/70 bg-muted/30 px-2 py-2"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-primary/90">
+                          {agent.role}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">{agent.task}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <motion.div
               initial={{ opacity: 0 }}

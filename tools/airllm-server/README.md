@@ -10,12 +10,21 @@ Runs large language models layer-by-layer using [AirLLM](https://github.com/lyog
 
 - Python 3.10+
 - pip
+- Backend runtime:
+  - macOS Apple Silicon: `mlx` (installed automatically from requirements)
+  - Windows/Linux: `torch` (installed automatically from requirements)
 
 ## Setup
 
 ```bash
 cd tools/airllm-server
 pip install -r requirements.txt
+```
+
+If you install manually on non-macOS:
+
+```bash
+python -m pip install airllm fastapi "uvicorn[standard]" huggingface_hub sentencepiece torch
 ```
 
 ## Running

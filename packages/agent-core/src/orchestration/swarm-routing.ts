@@ -32,6 +32,12 @@ export function selectSwarmRoute(
     }
   }
 
+  // Always prefer the parent task's model so sub-agents use the same model that was set up.
+  if (fallback?.providerId && fallback.modelId) {
+    return { providerId: fallback.providerId, modelId: fallback.modelId };
+  }
+
+  // Fallback: use role-preference priority list across connected providers.
   for (const providerId of ROLE_PROVIDER_PREFERENCES[role]) {
     const provider = providersById.get(providerId);
     if (provider?.selectedModelId) {
@@ -42,10 +48,7 @@ export function selectSwarmRoute(
     }
   }
 
-  if (fallback?.providerId && fallback.modelId) {
-    return { providerId: fallback.providerId, modelId: fallback.modelId };
-  }
-
+  // Last resort: first connected provider found.
   const first = readyProviders.find((provider) => isProviderReady(provider));
   if (!first?.selectedModelId) {
     return null;

@@ -12,7 +12,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import net from 'net';
+import { createConnection } from 'node:net';
 
 const APP_DATA_NAME = 'Accomplish';
 app.setPath('userData', path.join(app.getPath('appData'), APP_DATA_NAME));
@@ -85,6 +85,8 @@ const WEB_DIST = app.isPackaged
   : path.join(process.env.APP_ROOT, '../web/dist/client');
 
 let mainWindow: BrowserWindow | null = null;
+let rendererCrashRecoveryCount = 0;
+let rendererCrashRecoveryTimer: NodeJS.Timeout | null = null;
 
 function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
@@ -96,7 +98,7 @@ function canConnectToUrl(rawUrl: string, timeoutMs = 1000): Promise<boolean> {
       const url = new URL(rawUrl);
       const host = url.hostname;
       const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
-      const socket = net.createConnection({ host, port });
+      const socket = createConnection({ host, port });
 
       let settled = false;
       const finish = (ok: boolean) => {
@@ -133,14 +135,30 @@ async function resolveDevRouterUrl(): Promise<string | null> {
     }
   }
 
-  return ROUTER_URL || null;
+  return null;
 }
 
 async function loadRenderer(mainWindowRef: BrowserWindow): Promise<void> {
   if (app.isPackaged) {
     const indexPath = path.join(WEB_DIST, 'index.html');
-    console.log('[Main] Loading from file:', indexPath);
-    await mainWindowRef.loadFile(indexPath);
+    if (fs.existsSync(indexPath)) {
+      console.log('[Main] Loading from file:', indexPath);
+      await mainWindowRef.loadFile(indexPath);
+    } else {
+      console.error('[Main] Packaged web UI missing:', indexPath);
+      const packagedMissingHtml = `<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1f2937;">
+    <h2>UI Assets Missing</h2>
+    <p>The packaged web UI was not found.</p>
+    <p>Expected file: <code>${indexPath}</code></p>
+    <p>Rebuild and reinstall the app package.</p>
+  </body>
+</html>`;
+      await mainWindowRef.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(packagedMissingHtml)}`,
+      );
+    }
     return;
   }
 
@@ -151,12 +169,17 @@ async function loadRenderer(mainWindowRef: BrowserWindow): Promise<void> {
     return;
   }
 
-  const fallbackIndexPath = path.join(WEB_DIST, 'index.html');
-  console.warn(
-    '[Main] No reachable dev router URL found; falling back to local file:',
-    fallbackIndexPath,
-  );
-  await mainWindowRef.loadFile(fallbackIndexPath);
+  console.error('[Main] No reachable dev router URL found. Showing startup diagnostics page.');
+  const diagnosticsHtml = `<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1f2937;">
+    <h2>Renderer Not Reachable</h2>
+    <p>Accomplish could not connect to the web dev server.</p>
+    <p>Expected one of: <code>http://localhost:5173</code> or <code>http://localhost:5174</code></p>
+    <p>Try restarting with <code>pnpm dev</code>.</p>
+  </body>
+</html>`;
+  await mainWindowRef.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(diagnosticsHtml)}`);
 }
 
 function createWindow() {
@@ -228,7 +251,8 @@ function createWindow() {
 
   const isE2EMode = (global as Record<string, unknown>).E2E_SKIP_AUTH === true;
   const isTestEnv = process.env.NODE_ENV === 'test';
-  if (!app.isPackaged && !isE2EMode && !isTestEnv) {
+  const shouldOpenDevTools = process.env.ACCOMPLISH_OPEN_DEVTOOLS === '1';
+  if (!app.isPackaged && !isE2EMode && !isTestEnv && shouldOpenDevTools) {
     mainWindow.webContents.openDevTools({ mode: 'right' });
   }
 
@@ -252,12 +276,64 @@ function createWindow() {
           errorDescription,
           validatedURL,
         });
+        const failHtml = `<!doctype html>
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #1f2937;">
+    <h2>Renderer Load Failed</h2>
+    <p>${errorDescription} (code ${errorCode})</p>
+    <p>URL: <code>${validatedURL || 'unknown'}</code></p>
+    <p>Try restarting <code>pnpm dev</code> or rebuilding the desktop app.</p>
+  </body>
+</html>`;
+        void mainWindow?.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(failHtml)}`);
       }
     },
   );
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererCrashRecoveryCount = 0;
+    if (rendererCrashRecoveryTimer) {
+      clearTimeout(rendererCrashRecoveryTimer);
+      rendererCrashRecoveryTimer = null;
+    }
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (!sourceId.includes('localhost') && !sourceId.includes('index.html')) {
+      return;
+    }
+    const levelLabel = level === 3 ? 'ERROR' : level === 2 ? 'WARN' : 'INFO';
+    console.log(`[Renderer ${levelLabel}] ${sourceId}:${line} ${message}`);
+  });
+
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[Main] Renderer process exited unexpectedly:', details);
+
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    if (rendererCrashRecoveryCount >= 3) {
+      console.error('[Main] Renderer recovery limit reached. Manual restart required.');
+      return;
+    }
+
+    rendererCrashRecoveryCount += 1;
+    if (rendererCrashRecoveryTimer) {
+      clearTimeout(rendererCrashRecoveryTimer);
+    }
+
+    rendererCrashRecoveryTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+      console.warn(
+        `[Main] Attempting renderer recovery (${rendererCrashRecoveryCount}/3) by reloading UI`,
+      );
+      void loadRenderer(mainWindow).catch((error) => {
+        console.error('[Main] Renderer recovery load failed:', error);
+      });
+    }, 600);
   });
 
   void loadRenderer(mainWindow).catch((error) => {

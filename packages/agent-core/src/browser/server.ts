@@ -10,7 +10,12 @@ export interface BrowserServerConfig {
 }
 
 function buildNodeEnvironment(bundledNodeBinPath?: string): NodeJS.ProcessEnv {
-  const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
+  const spawnEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    // Always run dev-browser headless so no Chromium window pops up for the user.
+    // The agent can still use the full browser API; it just won't be visible.
+    HEADLESS: 'true',
+  };
 
   if (bundledNodeBinPath) {
     const delimiter = process.platform === 'win32' ? ';' : ':';
@@ -32,7 +37,7 @@ function getNodeExecutable(bundledNodeBinPath?: string): string {
   if (!bundledNodeBinPath) {
     throw new Error(
       '[Browser] Bundled Node.js path is missing. ' +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
     );
   }
 
@@ -44,7 +49,7 @@ function getNodeExecutable(bundledNodeBinPath?: string): string {
 
   throw new Error(
     `[Browser] Missing bundled Node.js executable: ${nodePath}. ` +
-      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
+    'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
   );
 }
 
@@ -62,8 +67,8 @@ function resolvePlaywrightCliPath(mcpToolsPath: string): string {
 
   throw new Error(
     '[Browser] Playwright CLI not found for dev-browser setup. ' +
-      `Checked: ${candidates.join(', ')}. ` +
-      `Run "npm --prefix \\"${mcpToolsPath}\\" install --omit=dev".`,
+    `Checked: ${candidates.join(', ')}. ` +
+    `Run "npm --prefix \\"${mcpToolsPath}\\" install --omit=dev".`,
   );
 }
 
@@ -179,7 +184,7 @@ export async function startDevBrowserServer(
   if (!fs.existsSync(serverScript)) {
     throw new Error(
       `[Browser] Missing dev-browser launcher script: ${serverScript}. ` +
-        'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" before starting the app.',
+      'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" before starting the app.',
     );
   }
   const spawnEnv = buildNodeEnvironment(config.bundledNodeBinPath);

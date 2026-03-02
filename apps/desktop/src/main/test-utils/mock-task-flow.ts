@@ -1,10 +1,11 @@
 import { BrowserWindow } from 'electron';
-import type { Task, TaskMessage } from '@accomplish_ai/agent-core';
+import type { SwarmChildSummary, Task, TaskMessage } from '@accomplish_ai/agent-core';
 import { createMessageId } from '@accomplish_ai/agent-core';
 import { getStorage } from '../store/storage';
 
 export type MockScenario =
   | 'success'
+  | 'swarm'
   | 'with-tool'
   | 'permission-required'
   | 'question'
@@ -27,6 +28,7 @@ export function isMockTaskEventsEnabled(): boolean {
 
 const SCENARIO_KEYWORDS: Record<MockScenario, string[]> = {
   success: ['__e2e_success__', 'test success'],
+  swarm: ['__e2e_swarm__', 'test swarm'],
   'with-tool': ['__e2e_tool__', 'use tool', 'search files'],
   'permission-required': ['__e2e_permission__', 'write file', 'create file'],
   question: ['__e2e_question__'],
@@ -41,6 +43,7 @@ export function detectScenarioFromPrompt(prompt: string): MockScenario {
     'error',
     'interrupted',
     'question',
+    'swarm',
     'permission-required',
     'with-tool',
     'success',
@@ -108,6 +111,10 @@ async function executeScenario(
       await executeSuccessScenario(sendEvent, storage, taskId, delayMs);
       break;
 
+    case 'swarm':
+      await executeSwarmScenario(sendEvent, storage, taskId, delayMs);
+      break;
+
     case 'with-tool':
       await executeToolScenario(sendEvent, storage, taskId, delayMs);
       break;
@@ -154,6 +161,128 @@ async function executeSuccessScenario(
     taskId,
     type: 'complete',
     result: { status: 'success', sessionId: `session_${taskId}` },
+  });
+}
+
+async function executeSwarmScenario(
+  sendEvent: (channel: string, data: unknown) => void,
+  storage: ReturnType<typeof getStorage>,
+  taskId: string,
+  delayMs: number,
+): Promise<void> {
+  const providerId = 'openai';
+  const modelId = 'openai/gpt-5';
+
+  let swarmChildren: SwarmChildSummary[] = [
+    {
+      childId: `${taskId}_child_researcher`,
+      role: 'researcher',
+      providerId,
+      modelId,
+      status: 'queued',
+    },
+    {
+      childId: `${taskId}_child_coder`,
+      role: 'coder',
+      providerId,
+      modelId,
+      status: 'queued',
+    },
+    {
+      childId: `${taskId}_child_reviewer`,
+      role: 'reviewer',
+      providerId,
+      modelId,
+      status: 'queued',
+    },
+  ];
+
+  const upsertChild = (child: SwarmChildSummary) => {
+    swarmChildren = swarmChildren.map((existing) =>
+      existing.childId === child.childId ? child : existing,
+    );
+    sendEvent('task:update', {
+      taskId,
+      type: 'swarm-child-update',
+      swarmChild: child,
+    });
+  };
+
+  // Emit queued updates for all children
+  for (const child of swarmChildren) {
+    upsertChild(child);
+  }
+  await sleep(delayMs);
+
+  const nowIso = () => new Date().toISOString();
+
+  const runChild = async (
+    role: SwarmChildSummary['role'],
+    outputPreview: string,
+  ): Promise<void> => {
+    const childId = `${taskId}_child_${role}`;
+    const startedAt = nowIso();
+    upsertChild({
+      childId,
+      role,
+      providerId,
+      modelId,
+      status: 'running',
+      startedAt,
+    });
+    await sleep(delayMs * 2);
+    upsertChild({
+      childId,
+      role,
+      providerId,
+      modelId,
+      status: 'completed',
+      startedAt,
+      completedAt: nowIso(),
+      outputPreview,
+    });
+  };
+
+  await runChild(
+    'researcher',
+    'Research brief: validate swarm UI, emit child updates, ensure completion carries swarmChildren.',
+  );
+  await runChild(
+    'coder',
+    'Implementation: add mock swarm scenario (__e2e_swarm__), update e2e constants, and add an execution page test.',
+  );
+  await runChild(
+    'reviewer',
+    'Review: check child updates render, expand reveals previews, and completion preserves swarmChildren in store.',
+  );
+
+  const summaryLines = swarmChildren
+    .map((c) => `- ${c.role} (${c.providerId}/${c.modelId}): ${c.status}`)
+    .join('\n');
+
+  sendEvent('task:update', {
+    taskId,
+    type: 'message',
+    message: {
+      id: createMessageId(),
+      type: 'assistant',
+      content: `Swarm execution summary:\n${summaryLines}`,
+      timestamp: nowIso(),
+    },
+  });
+  await sleep(delayMs);
+
+  storage.updateTaskStatus(taskId, 'completed', nowIso());
+
+  sendEvent('task:update', {
+    taskId,
+    type: 'complete',
+    result: {
+      status: 'success',
+      sessionId: `session_${taskId}`,
+      partial: false,
+      swarmChildren,
+    },
   });
 }
 

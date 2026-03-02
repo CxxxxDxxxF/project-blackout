@@ -94,6 +94,24 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
     }
   };
 
+  const saveSwarmSettings = async (enabled: boolean, maxAgents: number) => {
+    setSaveState('saving');
+    setSaveError('');
+    try {
+      await accomplish.setSwarmSettings({
+        enabled,
+        defaults: { maxAgents },
+      });
+      setSaveState('saved');
+      window.setTimeout(() => {
+        setSaveState('idle');
+      }, 1500);
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(error instanceof Error ? error.message : 'Failed to save swarm settings');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <LanguageSelector />
@@ -152,7 +170,11 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
           <input
             type="checkbox"
             checked={swarmEnabled}
-            onChange={(e) => setSwarmEnabled(e.target.checked)}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setSwarmEnabled(next);
+              void saveSwarmSettings(next, swarmMaxAgents);
+            }}
             data-testid="settings-swarm-enabled"
           />
         </label>
@@ -163,9 +185,13 @@ export function AboutTab({ appVersion, accomplish }: AboutTabProps) {
             min={1}
             max={3}
             value={swarmMaxAgents}
-            onChange={(e) =>
-              setSwarmMaxAgents(Math.max(1, Math.min(3, Number(e.target.value) || 1)))
-            }
+            onChange={(e) => {
+              const next = Math.max(1, Math.min(3, Number(e.target.value) || 1));
+              setSwarmMaxAgents(next);
+            }}
+            onBlur={() => {
+              void saveSwarmSettings(swarmEnabled, swarmMaxAgents);
+            }}
             data-testid="settings-swarm-max-agents"
             className="mt-2 max-w-28"
           />

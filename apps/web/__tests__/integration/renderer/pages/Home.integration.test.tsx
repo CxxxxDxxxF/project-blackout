@@ -234,6 +234,16 @@ describe('Home Page Integration', () => {
       expect(submitButton).toBeInTheDocument();
     });
 
+    it('should render analog clock on home header', () => {
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <HomePage />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByTestId('home-analog-clock')).toBeInTheDocument();
+    });
+
     it('should render example prompts section', () => {
       // Arrange & Act
       render(
@@ -363,6 +373,71 @@ describe('Home Page Integration', () => {
       await waitFor(() => {
         expect(mockStartTask).toHaveBeenCalled();
       });
+      expect(mockStartTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'My task',
+          taskId: expect.any(String),
+        }),
+      );
+      const firstArg = mockStartTask.mock.calls[0]?.[0] as { swarm?: unknown } | undefined;
+      expect(firstArg?.swarm).toBeUndefined();
+    });
+
+    it('should include swarm config when swarm mode is enabled', async () => {
+      const mockTask = createMockTask('task-321', 'Swarm task', 'running');
+      mockStartTask.mockResolvedValue(mockTask);
+      mockAccomplish.getSwarmSettings.mockResolvedValue({ enabled: true, defaults: { maxAgents: 3 } });
+
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <HomePage />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('swarm-mode-toggle')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('swarm-mode-toggle'));
+
+      const textarea = screen.getByTestId('task-input-textarea');
+      fireEvent.change(textarea, { target: { value: 'Swarm task' } });
+
+      const submitButton = screen.getByTestId('task-input-submit');
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockStartTask).toHaveBeenCalledWith(
+          expect.objectContaining({
+            prompt: 'Swarm task',
+            taskId: expect.any(String),
+            swarm: { enabled: true, maxAgents: 3 },
+          }),
+        );
+      });
+    });
+
+    it('should show bottom swarm sub-agent popup when swarm mode is enabled', async () => {
+      mockAccomplish.getSwarmSettings.mockResolvedValue({ enabled: true, defaults: { maxAgents: 3 } });
+
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <HomePage />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('swarm-mode-toggle')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('swarm-preview-popup')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('swarm-mode-toggle'));
+
+      expect(screen.getByTestId('swarm-preview-popup')).toBeInTheDocument();
+      expect(screen.getByTestId('swarm-preview-agent-researcher')).toBeInTheDocument();
+      expect(screen.getByTestId('swarm-preview-agent-coder')).toBeInTheDocument();
+      expect(screen.getByTestId('swarm-preview-agent-reviewer')).toBeInTheDocument();
     });
 
     it('should not submit empty task', async () => {

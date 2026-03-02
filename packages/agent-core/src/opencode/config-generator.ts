@@ -293,7 +293,7 @@ function resolveMcpCommand(
   if (!fs.existsSync(distPath)) {
     throw new Error(
       `[OpenCode Config] Missing MCP dist entry: ${distPath}. ` +
-        'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" before launching.',
+      'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" before launching.',
     );
   }
 
@@ -335,11 +335,11 @@ After calling start_task, you MUST read the SKILL.md file for each skill you lis
 **Available Skills:**
 
 ${skills
-  .map(
-    (s) => `- **${s.name}** (${s.command}): ${s.description}
+        .map(
+          (s) => `- **${s.name}** (${s.command}): ${s.description}
   File: ${s.filePath}`,
-  )
-  .join('\n\n')}
+        )
+        .join('\n\n')}
 
 Use empty array [] if no skills apply to your task.
 
@@ -349,10 +349,63 @@ Use empty array [] if no skills apply to your task.
     systemPrompt += skillsSection;
   }
 
+  // ─── soul.md ───────────────────────────────────────────────────────────────
+  // The agent's persistent self — written by the agent, loaded on every task.
+  // The agent can modify this file using bash and changes take effect next run.
+  const soulPath = path.join(userDataPath, 'soul.md');
+  if (!fs.existsSync(soulPath)) {
+    const defaultSoul = [
+      '# Soul',
+      '',
+      'This file is your persistent self, written by you.',
+      'Modify it during any conversation to update your personality, preferences, and memories.',
+      'Changes take effect on the next task.',
+      '',
+      '## Personality',
+      '',
+      '(Add your personality traits here.)',
+      '',
+      '## Memories & Preferences',
+      '',
+      '(Add things you want to remember across conversations here.)',
+      '',
+      '## Behavioral Rules',
+      '',
+      '(Add custom rules or habits you want to follow here.)',
+    ].join('\n');
+    fs.writeFileSync(soulPath, defaultSoul, 'utf-8');
+    console.log('[OpenCode Config] Created default soul.md at:', soulPath);
+  }
+
+  const soulContent = fs.readFileSync(soulPath, 'utf-8').trim();
+  systemPrompt += `
+
+<soul>
+##############################################################################
+# YOUR SOUL — Persistent self, personality, and behavioral overrides
+##############################################################################
+
+${soulContent || '(Your soul is empty. Start writing to it to define your persistent self.)'}
+
+##############################################################################
+# HOW TO UPDATE YOUR SOUL
+##############################################################################
+
+You can rewrite this file at any time using your bash tool:
+  Path: ${soulPath}
+
+Example: write a Python heredoc or echo to update it.
+Changes take effect on the NEXT task launch.
+If you update your soul during a conversation, let the user know.
+
+##############################################################################
+</soul>
+`;
+
   if (!bundledNodeBinPath) {
     throw new Error(
       '[OpenCode Config] Missing bundled Node.js path; cannot launch MCP tools. ' +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild artifacts.',
     );
   }
 
@@ -578,10 +631,12 @@ export interface BuildCliArgsOptions {
     provider: string;
     model: string;
   } | null;
+  instruction?: string;
 }
 
 export function buildCliArgs(options: BuildCliArgsOptions): string[] {
-  const { prompt, sessionId, selectedModel } = options;
+  const { sessionId, selectedModel, instruction } = options;
+  let { prompt } = options;
 
   const args: string[] = ['run'];
 
@@ -618,6 +673,11 @@ export function buildCliArgs(options: BuildCliArgsOptions): string[] {
 
   if (sessionId) {
     args.push('--session', sessionId);
+  }
+
+  if (instruction) {
+    // Append the instruction directly to the prompt instead of a CLI flag
+    prompt = `${prompt}\n\n[SYSTEM INSTRUCTION: ${instruction}]`;
   }
 
   args.push('--agent', ACCOMPLISH_AGENT_NAME);

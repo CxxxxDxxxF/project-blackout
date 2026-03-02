@@ -20,10 +20,11 @@ import {
   Download,
   CaretDown,
   CaretRight,
+  Stack,
 } from '@phosphor-icons/react';
 import { isWaitingForUser } from '../lib/waiting-detection';
 import { SettingsDialog } from '../components/layout/SettingsDialog';
-import { TodoSidebar } from '../components/TodoSidebar';
+import { TaskSidebar } from '../components/execution/TaskSidebar';
 import { ModelIndicator } from '../components/ui/ModelIndicator';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 import { SpeechInputButton } from '../components/ui/SpeechInputButton';
@@ -33,6 +34,7 @@ import { MessageBubble } from '../components/execution/MessageList';
 import { ToolProgress } from '../components/execution/ToolProgress';
 import { PermissionDialog } from '../components/execution/PermissionDialog';
 import { DebugPanel, type DebugLogEntry } from '../components/execution/DebugPanel';
+import { getToolDisplayInfo } from '../constants/tool-mappings';
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
   let timeoutId: ReturnType<typeof setTimeout>;
@@ -61,6 +63,8 @@ export function ExecutionPage() {
   >('providers');
   const [pendingFollowUp, setPendingFollowUp] = useState<string | null>(null);
   const pendingSpeechFollowUpRef = useRef<string | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState('');
+  const queueInputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -88,6 +92,9 @@ export function ExecutionPage() {
     todos,
     todosTaskId,
     getSwarmChildrenForTask,
+    messageQueue,
+    enqueueMessage,
+    dequeueMessage,
   } = useTaskStore();
   const [expandedSwarmChildren, setExpandedSwarmChildren] = useState<Record<string, boolean>>({});
 
@@ -102,7 +109,7 @@ export function ExecutionPage() {
         followUpInputRef.current?.focus();
       }, 0);
     },
-    onError: () => {},
+    onError: () => { },
   });
 
   const scrollToBottom = useMemo(
@@ -232,13 +239,120 @@ export function ExecutionPage() {
     }
   }, [currentTask?.messages?.length, scrollToBottom, isAtBottom]);
 
+  const swarmChildren = useMemo(
+    () => (currentTask ? getSwarmChildrenForTask(currentTask.id) : []),
+    [currentTask, getSwarmChildrenForTask],
+  );
+  const hasSwarmChildren = swarmChildren.length > 0;
+  const swarmStats = useMemo(() => {
+    const totals = {
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      timed_out: 0,
+    };
+    for (const child of swarmChildren) {
+      totals[child.status] += 1;
+    }
+    const finished = totals.completed + totals.failed + totals.cancelled + totals.timed_out;
+    const progressPct =
+      swarmChildren.length > 0 ? Math.round((finished / swarmChildren.length) * 100) : 0;
+    return { ...totals, finished, progressPct };
+  }, [swarmChildren]);
+  const hasSession = currentTask?.sessionId || currentTask?.result?.sessionId;
+  // Auto-dequeue: when the task finishes and the queue has items, send the next one automatically.
   const isComplete = ['completed', 'failed', 'cancelled', 'interrupted'].includes(
     currentTask?.status ?? '',
   );
-  const swarmChildren = currentTask ? getSwarmChildrenForTask(currentTask.id) : [];
-  const hasSwarmChildren = swarmChildren.length > 0;
-  const hasSession = currentTask?.sessionId || currentTask?.result?.sessionId;
-  const canFollowUp = isComplete && (hasSession || currentTask?.status === 'interrupted');
+  const canFollowUp = isComplete;
+  const liveProgress = useMemo(() => {
+    if (!currentTask) {
+      return { percent: 0, phase: 'Idle' };
+    }
+
+    if (currentTask.status === 'completed') {
+      return { percent: 100, phase: 'Completed' };
+    }
+
+    if (currentTask.status === 'failed') {
+      return { percent: 100, phase: 'Failed' };
+    }
+
+    if (currentTask.status === 'cancelled' || currentTask.status === 'interrupted') {
+      return { percent: 100, phase: 'Stopped' };
+    }
+
+    if (currentTask.status === 'queued') {
+      return { percent: 8, phase: 'Queued' };
+    }
+
+    if (hasSwarmChildren) {
+      let phase = `${swarmStats.finished}/${swarmChildren.length} sub-agents completed`;
+      if (swarmStats.running > 0) {
+        phase = `${swarmStats.finished}/${swarmChildren.length} complete, ${swarmStats.running} running`;
+      } else if (swarmStats.finished === swarmChildren.length && swarmChildren.length > 0) {
+        phase = 'Merging sub-agent outputs';
+      }
+      return { percent: swarmStats.progressPct, phase };
+    }
+
+    const messageCount = currentTask.messages.length;
+    let percent = Math.min(82, 10 + messageCount * 8);
+
+    let phase = 'Planning';
+    if (startupStageTaskId === id && startupStage?.message) {
+      phase = startupStage.message;
+      percent = Math.max(percent, 20);
+    } else if (currentTool) {
+      phase =
+        (currentToolInput as { description?: string })?.description ||
+        getToolDisplayInfo(currentTool)?.label ||
+        currentTool;
+      percent = Math.max(percent, 28);
+    } else if (messageCount > 0) {
+      phase = 'Synthesizing result';
+      percent = Math.max(percent, 52);
+    }
+
+    return { percent: Math.min(percent, 95), phase };
+  }, [
+    currentTask,
+    startupStageTaskId,
+    id,
+    startupStage,
+    currentTool,
+    currentToolInput,
+    hasSwarmChildren,
+    swarmStats.progressPct,
+    swarmStats.running,
+    swarmStats.finished,
+    swarmChildren.length,
+  ]);
+
+
+  useEffect(() => {
+    if (!isComplete || isLoading) return;
+    if (messageQueue.length === 0) return;
+    // Small delay so the UI settles before firing the next message.
+    const timer = setTimeout(() => {
+      const next = dequeueMessage();
+      if (next) {
+        void sendFollowUp(next);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete, isLoading, messageQueue.length]);
+
+  const handleQueueMessage = useCallback(() => {
+    const msg = queuedMessage.trim();
+    if (!msg) return;
+    enqueueMessage(msg);
+    setQueuedMessage('');
+    queueInputRef.current?.focus();
+  }, [queuedMessage, enqueueMessage]);
 
   useEffect(() => {
     if (canFollowUp) {
@@ -575,53 +689,9 @@ export function ExecutionPage() {
               data-testid="messages-scroll-container"
             >
               <div className="max-w-4xl mx-auto space-y-4">
-                {hasSwarmChildren && (
-                  <Card className="p-3 space-y-2" data-testid="swarm-children-panel">
-                    <div className="text-sm font-medium">Swarm Agents</div>
-                    {swarmChildren.map((child) => {
-                      const expanded = expandedSwarmChildren[child.childId] === true;
-                      return (
-                        <div key={child.childId} className="rounded-md border border-border">
-                          <button
-                            type="button"
-                            className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/40"
-                            onClick={() => {
-                              setExpandedSwarmChildren((prev) => ({
-                                ...prev,
-                                [child.childId]: !expanded,
-                              }));
-                            }}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {expanded ? (
-                                <CaretDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                              ) : (
-                                <CaretRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                              )}
-                              <span className="text-sm capitalize">{child.role}</span>
-                              <span className="text-xs text-muted-foreground truncate">
-                                {child.providerId}/{child.modelId}
-                              </span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{child.status}</span>
-                          </button>
-                          {expanded && (
-                            <div className="px-3 pb-3">
-                              {child.error && (
-                                <p className="text-xs text-destructive mb-1">{child.error}</p>
-                              )}
-                              {child.outputPreview && (
-                                <pre className="text-xs whitespace-pre-wrap text-muted-foreground bg-muted/30 rounded p-2 overflow-x-auto">
-                                  {child.outputPreview}
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </Card>
-                )}
+                {/* Note: Live Progress is now in the persistent TaskSidebar */}
+
+                {/* Note: Swarm Progress card is now in the persistent TaskSidebar */}
 
                 {currentTask.messages
                   .filter((m) => !(m.type === 'tool' && m.toolName?.toLowerCase() === 'bash'))
@@ -697,7 +767,28 @@ export function ExecutionPage() {
             </div>
 
             <AnimatePresence>
-              {todosTaskId === id && todos.length > 0 && <TodoSidebar todos={todos} />}
+              <TaskSidebar
+                currentTask={currentTask}
+                liveProgress={liveProgress}
+                todos={todosTaskId === id ? todos : []}
+                swarmStats={swarmStats}
+                swarmChildren={swarmChildren}
+                expandedSwarmChildren={expandedSwarmChildren}
+                onToggleSwarmChild={(childId) => {
+                  setExpandedSwarmChildren((prev) => ({
+                    ...prev,
+                    [childId]: !prev[childId],
+                  }));
+                }}
+                hasSwarmChildren={hasSwarmChildren}
+                messageQueue={messageQueue}
+                onClear={async () => {
+                  if (!isComplete) {
+                    await interruptTask();
+                  }
+                  navigate('/');
+                }}
+              />
             </AnimatePresence>
           </div>
         )}
@@ -732,6 +823,60 @@ export function ExecutionPage() {
                 >
                   <span className="block h-2.5 w-2.5 rounded-[2px] bg-white" />
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Queue input — shown while the bot is actively running */}
+        {!isComplete && currentTask && (
+          <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-3">
+            <div className="max-w-4xl mx-auto">
+              <div className="rounded-xl border border-border bg-background shadow-sm transition-all duration-200 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+                <div className="px-4 pt-3 pb-2">
+                  <textarea
+                    ref={queueInputRef}
+                    value={queuedMessage}
+                    onChange={(e) => {
+                      setQueuedMessage(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleQueueMessage();
+                      }
+                    }}
+                    placeholder="Queue a message for when the agent finishes..."
+                    rows={1}
+                    className="w-full max-h-[120px] resize-none bg-transparent text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
+                    data-testid="execution-queue-input"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border/50">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Stack className="h-3.5 w-3.5" />
+                    {messageQueue.length === 0
+                      ? 'Messages will be sent when the agent finishes'
+                      : (
+                        <span className="text-primary font-medium">
+                          {messageQueue.length} message{messageQueue.length > 1 ? 's' : ''} queued
+                        </span>
+                      )
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleQueueMessage}
+                    disabled={!queuedMessage.trim()}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Queue message"
+                  >
+                    <ArrowBendDownLeft className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -779,13 +924,13 @@ export function ExecutionPage() {
                       }
                     }}
                     placeholder={
-                      currentTask.status === 'interrupted'
-                        ? hasSession
+                      !hasSession
+                        ? t('followUp.noSessionPlaceholder')
+                        : currentTask.status === 'interrupted'
                           ? t('followUp.interruptedPlaceholder')
-                          : t('followUp.noSessionPlaceholder')
-                        : currentTask.status === 'completed'
-                          ? t('followUp.completedPlaceholder')
-                          : t('followUp.defaultPlaceholder')
+                          : currentTask.status === 'completed'
+                            ? t('followUp.completedPlaceholder')
+                            : t('followUp.defaultPlaceholder')
                     }
                     disabled={isLoading || speechInput.isRecording}
                     rows={1}

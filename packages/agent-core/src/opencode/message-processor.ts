@@ -8,6 +8,7 @@ import { isHiddenToolName } from './tool-classification.js';
  */
 export const MESSAGE_BATCH_DELAY_MS = 50;
 const MAX_TOOL_OUTPUT_LENGTH = 200_000;
+const MAX_TOOL_INPUT_LENGTH = 8_000;
 const MAX_SCREENSHOT_ATTACHMENT_COUNT = 1;
 const MAX_SCREENSHOT_ATTACHMENT_LENGTH = 200_000;
 
@@ -28,6 +29,33 @@ export interface MessageBatcher {
   timeout: NodeJS.Timeout | null;
   taskId: string;
   flush: () => void;
+}
+
+function sanitizeToolInput(input: unknown): unknown {
+  if (input === undefined) {
+    return input;
+  }
+  try {
+    const raw = JSON.stringify(input);
+    if (raw.length <= MAX_TOOL_INPUT_LENGTH) {
+      return input;
+    }
+    return {
+      truncated: true,
+      preview: `${raw.slice(0, MAX_TOOL_INPUT_LENGTH)}...[truncated ${raw.length - MAX_TOOL_INPUT_LENGTH} chars]`,
+    };
+  } catch {
+    return '[unserializable tool input]';
+  }
+}
+
+function isRecoverablePersistError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = 'code' in error ? String((error as { code?: unknown }).code) : '';
+  const message = 'message' in error ? String((error as { message?: unknown }).message) : '';
+  return code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || /FOREIGN KEY constraint failed/i.test(message);
 }
 
 /**
@@ -215,7 +243,7 @@ export function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
       type: 'tool',
       content: `Using tool: ${displayName}`,
       toolName: message.part.tool,
-      toolInput: message.part.input,
+      toolInput: sanitizeToolInput(message.part.input),
       timestamp: new Date().toISOString(),
     };
   }
@@ -227,7 +255,7 @@ export function toTaskMessage(message: OpenCodeMessage): TaskMessage | null {
     if (displayName === null) {
       return null;
     }
-    const toolInput = toolUseMsg.part.state?.input;
+    const toolInput = sanitizeToolInput(toolUseMsg.part.state?.input);
     const toolOutput = toolUseMsg.part.state?.output || '';
     const status = toolUseMsg.part.state?.status;
 
@@ -289,7 +317,17 @@ export function createMessageBatcher(
       });
 
       for (const msg of batcher.pendingMessages) {
-        addTaskMessage(taskId, msg);
+        try {
+          addTaskMessage(taskId, msg);
+        } catch (error) {
+          if (isRecoverablePersistError(error)) {
+            console.warn(
+              `[message-processor] Skipping task message persist after teardown (taskId=${taskId}, messageId=${msg.id})`,
+            );
+            continue;
+          }
+          throw error;
+        }
       }
 
       batcher.pendingMessages = [];

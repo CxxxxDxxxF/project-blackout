@@ -120,14 +120,14 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
   if (!bundledNode) {
     throw new Error(
       '[OpenCode CLI] Bundled Node.js path is missing. ' +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
     );
   }
 
   if (!fs.existsSync(bundledNode.nodePath)) {
     throw new Error(
       `[OpenCode CLI] Bundled Node.js executable not found at ${bundledNode.nodePath}. ` +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
     );
   }
 
@@ -136,7 +136,7 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
   } catch {
     throw new Error(
       `[OpenCode CLI] Bundled Node.js executable is not executable at ${bundledNode.nodePath}. ` +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
     );
   }
 
@@ -221,15 +221,25 @@ export async function buildCliArgs(config: TaskConfig, _taskId: string): Promise
   const activeModel = storage.getActiveProviderModel();
   const selectedModel = config.modelOverride || activeModel || storage.getSelectedModel();
 
+  const isLocalModel =
+    selectedModel?.provider === 'ollama' ||
+    selectedModel?.provider === 'lm-studio' ||
+    (selectedModel?.provider === 'openai' && storage.getOpenAiBaseUrl().includes('localhost'));
+
+  const instruction = isLocalModel
+    ? 'You are a highly capable AI assistant running locally on the user\'s machine. You possess a suite of tools, including full web browser capabilities. NEVER claim you cannot browse the internet, access real-time information, or perform web searches. When asked about live information (news, sports, weather, prices), you MUST execute your browser tools to find the answer instead of refusing.'
+    : undefined;
+
   return coreBuildCliArgs({
     prompt: config.prompt,
     sessionId: config.sessionId,
     selectedModel: selectedModel
       ? {
-          provider: selectedModel.provider,
-          model: selectedModel.model,
-        }
+        provider: selectedModel.provider,
+        model: selectedModel.model,
+      }
       : null,
+    instruction: instruction,
   });
 }
 
@@ -275,7 +285,7 @@ function getBrowserServerConfig(): BrowserServerConfig {
   if (!bundledPaths) {
     throw new Error(
       '[Browser] Bundled Node.js path is missing. ' +
-        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+      'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
     );
   }
   return {

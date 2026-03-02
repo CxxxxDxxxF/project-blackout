@@ -29,6 +29,11 @@ interface StartResult {
   error?: string;
 }
 
+interface InstallDepsResult {
+  success: boolean;
+  error?: string;
+}
+
 class AirLLMServer {
   private process: ChildProcess | null = null;
   private loadedModelId: string | null = null;
@@ -55,7 +60,7 @@ class AirLLMServer {
     if (!python) {
       return {
         success: false,
-        error: 'python3 not found on PATH. Install Python 3.10+ to use AirLLM.',
+        error: `python3 not found on PATH. Install Python 3.10+ to use AirLLM. ${this.getAirllmDependencyHelp()}`,
       };
     }
 
@@ -79,7 +84,11 @@ class AirLLMServer {
       });
 
       this.process.stderr?.on('data', (chunk: Buffer) => {
-        console.error('[AirLLM]', chunk.toString().trim());
+        const line = chunk.toString().trim();
+        console.error('[AirLLM]', line);
+        if (line.includes('No module named') || line.includes('ModuleNotFoundError')) {
+          console.error('[AirLLM] Dependency hint:', this.getAirllmDependencyHelp());
+        }
       });
 
       this.process.on('exit', (code, signal) => {
@@ -92,13 +101,18 @@ class AirLLMServer {
         console.error('[AirLLM] Failed to spawn server:', err.message);
         this.loadedModelId = null;
         this.process = null;
-        resolve({ success: false, error: err.message });
+        resolve({ success: false, error: `${err.message}. ${this.getAirllmDependencyHelp()}` });
       });
 
       // Wait for the health endpoint to become available
       this.waitForHealth(10000)
         .then(() => resolve({ success: true }))
-        .catch((err: Error) => resolve({ success: false, error: err.message }));
+        .catch((err: Error) =>
+          resolve({
+            success: false,
+            error: `${err.message}. ${this.getAirllmDependencyHelp()}`,
+          }),
+        );
     });
   }
 
@@ -122,6 +136,76 @@ class AirLLMServer {
     this.process = null;
   }
 
+  async installDependencies(onLog?: (line: string) => void): Promise<InstallDepsResult> {
+    const python = await this.findPython();
+    if (!python) {
+      return {
+        success: false,
+        error: `python3 not found on PATH. ${this.getAirllmDependencyHelp()}`,
+      };
+    }
+
+    const requirementsPath = this.resolveRequirementsPath();
+    if (!fs.existsSync(requirementsPath)) {
+      return {
+        success: false,
+        error: `requirements.txt not found: ${requirementsPath}`,
+      };
+    }
+
+    return new Promise((resolve) => {
+      const child = spawn(
+        python,
+        ['-m', 'pip', 'install', '--upgrade', '-r', requirementsPath],
+        {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            PIP_DISABLE_PIP_VERSION_CHECK: '1',
+          },
+        },
+      );
+
+      let stderr = '';
+      child.stdout?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+          if (line.trim()) {
+            onLog?.(line);
+          }
+        }
+      });
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString();
+        stderr += text;
+        for (const line of text.split(/\r?\n/)) {
+          if (line.trim()) {
+            onLog?.(line);
+          }
+        }
+      });
+
+      child.on('error', (err) => {
+        resolve({
+          success: false,
+          error: `${err.message}. ${this.getAirllmDependencyHelp()}`,
+        });
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true });
+          return;
+        }
+        resolve({
+          success: false,
+          error: stderr.trim() || `pip install failed with exit code ${code ?? 'unknown'}`,
+        });
+      });
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -134,6 +218,12 @@ class AirLLMServer {
     const packagedScript = path.join(process.resourcesPath, 'airllm-server', 'server.py');
     const devScript = path.resolve(__dirname, '../../../../tools/airllm-server/server.py');
     return this.isPackagedRuntime() ? packagedScript : devScript;
+  }
+
+  private resolveRequirementsPath(): string {
+    const packagedRequirements = path.join(process.resourcesPath, 'airllm-server', 'requirements.txt');
+    const devRequirements = path.resolve(__dirname, '../../../../tools/airllm-server/requirements.txt');
+    return this.isPackagedRuntime() ? packagedRequirements : devRequirements;
   }
 
   private async findPython(): Promise<string | null> {
@@ -157,6 +247,16 @@ class AirLLMServer {
       }
     }
     return null;
+  }
+
+  private getAirllmDependencyHelp(): string {
+    if (process.platform === 'darwin') {
+      return 'Install AirLLM dependencies with: pip install -r tools/airllm-server/requirements.txt';
+    }
+    if (process.platform === 'win32') {
+      return 'Windows setup: py -3 -m pip install airllm fastapi "uvicorn[standard]" huggingface_hub sentencepiece torch';
+    }
+    return 'Linux setup: python3 -m pip install airllm fastapi "uvicorn[standard]" huggingface_hub sentencepiece torch';
   }
 
   private waitForHealth(timeoutMs: number): Promise<void> {

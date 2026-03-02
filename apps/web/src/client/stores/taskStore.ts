@@ -57,6 +57,8 @@ interface TaskState {
   swarmChildrenByTask: Record<string, SwarmChildSummary[]>;
   isLauncherOpen: boolean;
   launcherInitialPrompt: string | null;
+  /** Messages queued by the user while the agent is running. */
+  messageQueue: string[];
   openLauncher: () => void;
   openLauncherWithPrompt: (prompt: string) => void;
   closeLauncher: () => void;
@@ -89,6 +91,16 @@ interface TaskState {
   setAuthError: (error: { providerId: string; message: string }) => void;
   clearAuthError: () => void;
   getSwarmChildrenForTask: (taskId: string) => SwarmChildSummary[];
+  enqueueMessage: (message: string) => void;
+  dequeueMessage: () => string | null;
+  clearMessageQueue: () => void;
+}
+
+function hasUnfinishedSwarmChildren(children: SwarmChildSummary[] | undefined): boolean {
+  if (!children || children.length === 0) {
+    return false;
+  }
+  return children.some((child) => child.status === 'queued' || child.status === 'running');
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -108,6 +120,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   swarmChildrenByTask: {},
   isLauncherOpen: false,
   launcherInitialPrompt: null,
+  messageQueue: [],
 
   setSetupProgress: (taskId: string | null, message: string | null) => {
     let step = useTaskStore.getState().setupDownloadStep;
@@ -210,12 +223,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
 
     const sessionId = currentTask.result?.sessionId || currentTask.sessionId;
+    const unresolvedSwarm = hasUnfinishedSwarmChildren(get().swarmChildrenByTask[currentTask.id]);
 
-    if (!sessionId && currentTask.status === 'interrupted') {
+    const canRestartWithoutSession =
+      currentTask.status === 'completed' ||
+      currentTask.status === 'failed' ||
+      currentTask.status === 'cancelled' ||
+      currentTask.status === 'interrupted' ||
+      unresolvedSwarm;
+
+    if (!sessionId && canRestartWithoutSession) {
       void accomplish.logEvent({
         level: 'info',
-        message: 'UI follow-up: starting fresh task (no session from interrupted task)',
-        context: { taskId: currentTask.id },
+        message: 'UI follow-up: starting fresh task (no resumable session)',
+        context: {
+          taskId: currentTask.id,
+          status: currentTask.status,
+          unresolvedSwarm,
+        },
       });
       await startTask({ prompt: message });
       return;
@@ -244,11 +269,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       error: null,
       currentTask: state.currentTask
         ? {
-            ...state.currentTask,
-            status: 'running',
-            result: undefined,
-            messages: [...state.currentTask.messages, userMessage],
-          }
+          ...state.currentTask,
+          status: 'running',
+          result: undefined,
+          messages: [...state.currentTask.messages, userMessage],
+        }
         : null,
       tasks: state.tasks.map((t) =>
         t.id === taskId ? { ...t, status: 'running' as TaskStatus } : t,
@@ -340,7 +365,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     void accomplish.logEvent({
       level: 'debug',
       message: 'UI task update received',
-      context: { ...event },
+      context: { taskId: event.taskId, type: event.type },
     });
     set((state) => {
       const isCurrentTask = state.currentTask?.id === event.taskId;
@@ -371,8 +396,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       }
 
       if (event.type === 'complete' && event.result) {
+        const resultSwarmChildren = event.result.swarmChildren;
+        const existingSwarmChildren = state.swarmChildrenByTask[event.taskId] || [];
+        const unresolvedSwarm = hasUnfinishedSwarmChildren(
+          resultSwarmChildren && resultSwarmChildren.length > 0
+            ? resultSwarmChildren
+            : existingSwarmChildren,
+        );
+
         if (event.result.status === 'success') {
-          newStatus = 'completed';
+          newStatus = unresolvedSwarm ? 'interrupted' : 'completed';
         } else if (event.result.status === 'interrupted') {
           newStatus = 'interrupted';
         } else {
@@ -407,12 +440,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         updatedTasks = state.tasks.map((t) =>
           t.id === event.taskId
             ? {
-                ...t,
-                status: finalStatus,
-                ...(isCurrentTask && updatedCurrentTask
-                  ? { messages: updatedCurrentTask.messages }
-                  : {}),
-              }
+              ...t,
+              status: finalStatus,
+              ...(isCurrentTask && updatedCurrentTask
+                ? { messages: updatedCurrentTask.messages }
+                : {}),
+            }
             : t,
         );
       }
@@ -434,11 +467,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
         ...(event.type === 'complete' && event.result?.swarmChildren
           ? {
-              swarmChildrenByTask: {
-                ...state.swarmChildrenByTask,
-                [event.taskId]: event.result.swarmChildren,
-              },
-            }
+            swarmChildrenByTask: {
+              ...state.swarmChildrenByTask,
+              [event.taskId]: event.result.swarmChildren,
+            },
+          }
           : {}),
       };
     });
@@ -467,13 +500,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   updateTaskStatus: (taskId: string, status: TaskStatus) => {
     set((state) => {
+      const unresolvedSwarm = hasUnfinishedSwarmChildren(state.swarmChildrenByTask[taskId]);
+      const reconciledStatus =
+        status === 'completed' && unresolvedSwarm ? ('interrupted' as TaskStatus) : status;
+
       const updatedTasks = state.tasks.map((task) =>
-        task.id === taskId ? { ...task, status, updatedAt: new Date().toISOString() } : task,
+        task.id === taskId
+          ? { ...task, status: reconciledStatus, updatedAt: new Date().toISOString() }
+          : task,
       );
 
       const updatedCurrentTask =
         state.currentTask?.id === taskId
-          ? { ...state.currentTask, status, updatedAt: new Date().toISOString() }
+          ? { ...state.currentTask, status: reconciledStatus, updatedAt: new Date().toISOString() }
           : state.currentTask;
 
       return {
@@ -541,7 +580,24 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       authError: null,
       isLauncherOpen: false,
       swarmChildrenByTask: {},
+      messageQueue: [],
     });
+  },
+
+  enqueueMessage: (message: string) => {
+    set((state) => ({ messageQueue: [...state.messageQueue, message] }));
+  },
+
+  dequeueMessage: () => {
+    const { messageQueue } = get();
+    if (messageQueue.length === 0) return null;
+    const [first, ...rest] = messageQueue;
+    set({ messageQueue: rest });
+    return first;
+  },
+
+  clearMessageQueue: () => {
+    set({ messageQueue: [] });
   },
 
   setTodos: (taskId: string, todos: TodoItem[]) => {

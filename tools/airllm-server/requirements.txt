@@ -2,5 +2,6 @@ airllm>=2.11.0
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 huggingface_hub>=0.23.0
-mlx>=0.30.0
+mlx>=0.30.0; platform_system == "Darwin" and platform_machine == "arm64"
+torch>=2.2.0; platform_system != "Darwin"
 sentencepiece>=0.2.1

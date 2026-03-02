@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
 import { getAccomplish } from '@/lib/accomplish';
@@ -40,6 +41,48 @@ interface SettingsDialogProps {
   initialTab?: 'providers' | 'voice' | 'skills' | 'connectors' | 'about';
 }
 
+interface SettingsTabErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface SettingsTabErrorBoundaryState {
+  hasError: boolean;
+}
+
+class SettingsTabErrorBoundary extends Component<
+  SettingsTabErrorBoundaryProps,
+  SettingsTabErrorBoundaryState
+> {
+  public constructor(props: SettingsTabErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  public static getDerivedStateFromError(): SettingsTabErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('[SettingsDialog] Tab content crashed', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+
+  public render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          This tab crashed while rendering. Switch tabs and try again.
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -57,6 +100,10 @@ export function SettingsDialog({
   >(initialTab);
   const [appVersion, setAppVersion] = useState<string>('');
   const [skillsRefreshTrigger, setSkillsRefreshTrigger] = useState(0);
+  const activeTabLabelKey = useMemo(
+    () => TABS.find((tab) => tab.id === activeTab)?.labelKey,
+    [activeTab],
+  );
 
   const {
     settings,
@@ -261,7 +308,7 @@ export function SettingsDialog({
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          className="max-w-4xl w-full h-[80vh] flex flex-col overflow-hidden p-0"
+          className="max-w-6xl w-full h-[92vh] flex flex-col overflow-hidden p-0"
           data-testid="settings-dialog"
         >
           <DialogHeader className="sr-only">
@@ -278,7 +325,7 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-4xl w-full h-[65vh] flex overflow-hidden p-0"
+        className="max-w-6xl w-full h-[92vh] flex overflow-hidden p-0"
         data-testid="settings-dialog"
       >
         <DialogHeader className="sr-only">
@@ -317,164 +364,165 @@ export function SettingsDialog({
           {/* Content header with title + optional actions */}
           <div className="flex items-center justify-between px-6 pt-5 pb-3">
             <h3 className="text-sm font-semibold text-foreground">
-              {TABS.find((tab) => tab.id === activeTab)?.labelKey &&
-                t(TABS.find((tab) => tab.id === activeTab)!.labelKey)}
+              {activeTabLabelKey ? t(activeTabLabelKey) : ''}
             </h3>
           </div>
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto px-6 pb-6">
-            <div className="space-y-6">
-              {/* Close Warning */}
-              <AnimatePresence>
-                {closeWarning && (
-                  <motion.div
-                    className="rounded-lg border border-warning bg-warning/10 p-4 mb-6"
-                    variants={settingsVariants.fadeSlide}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={settingsTransitions.enter}
-                  >
-                    <div className="flex items-start gap-3">
-                      <svg
-                        className="h-5 w-5 text-warning flex-shrink-0 mt-0.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-warning">
-                          {t('warnings.noProviderReady')}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {t('warnings.noProviderReadyDescription')}
-                        </p>
-                        <div className="mt-3 flex gap-2">
-                          <button
-                            onClick={handleForceClose}
-                            className="rounded-md px-3 py-1.5 text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80"
-                          >
-                            {t('warnings.closeAnyway')}
-                          </button>
+            <SettingsTabErrorBoundary key={activeTab}>
+              <div className="space-y-6">
+                {/* Close Warning */}
+                <AnimatePresence>
+                  {closeWarning && (
+                    <motion.div
+                      className="rounded-lg border border-warning bg-warning/10 p-4 mb-6"
+                      variants={settingsVariants.fadeSlide}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={settingsTransitions.enter}
+                    >
+                      <div className="flex items-start gap-3">
+                        <svg
+                          className="h-5 w-5 text-warning flex-shrink-0 mt-0.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                          />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-warning">
+                            {t('warnings.noProviderReady')}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {t('warnings.noProviderReadyDescription')}
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={handleForceClose}
+                              className="rounded-md px-3 py-1.5 text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80"
+                            >
+                              {t('warnings.closeAnyway')}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Providers Tab */}
-              {activeTab === 'providers' && (
-                <div className="space-y-6">
-                  <section>
-                    <ProviderGrid
-                      settings={settings}
-                      selectedProvider={selectedProvider}
-                      onSelectProvider={handleSelectProvider}
-                      expanded={gridExpanded}
-                      onToggleExpanded={() => setGridExpanded(!gridExpanded)}
-                    />
-                  </section>
-
-                  <AnimatePresence>
-                    {selectedProvider && (
-                      <motion.section
-                        variants={settingsVariants.slideDown}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={settingsTransitions.enter}
-                      >
-                        <ProviderSettingsPanel
-                          key={selectedProvider}
-                          providerId={selectedProvider}
-                          connectedProvider={settings?.connectedProviders?.[selectedProvider]}
-                          onConnect={handleConnect}
-                          onDisconnect={handleDisconnect}
-                          onModelChange={handleModelChange}
-                          showModelError={showModelError}
-                        />
-                      </motion.section>
-                    )}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {selectedProvider && (
-                      <motion.section
-                        variants={settingsVariants.slideDown}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={{ ...settingsTransitions.enter, delay: 0.05 }}
-                      >
-                        <DebugSection debugMode={debugMode} onDebugToggle={handleDebugToggle} />
-                      </motion.section>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )}
-
-              {/* Skills Tab */}
-              {activeTab === 'skills' && (
-                <div className="space-y-4">
-                  <SkillsPanel refreshTrigger={skillsRefreshTrigger} />
-                </div>
-              )}
-
-              {/* Connectors Tab */}
-              {activeTab === 'connectors' && (
-                <div className="space-y-6">
-                  <ConnectorsPanel />
-                </div>
-              )}
-
-              {/* Voice Input Tab */}
-              {activeTab === 'voice' && (
-                <div className="space-y-6">
-                  <SpeechSettingsForm />
-                </div>
-              )}
-
-              {/* About Tab */}
-              {activeTab === 'about' && (
-                <AboutTab appVersion={appVersion} accomplish={accomplish} />
-              )}
-
-              {/* Footer: Add (skills only) + Done */}
-              <div className="mt-4 flex items-center justify-between">
-                <div>
-                  {activeTab === 'skills' && (
-                    <AddSkillDropdown
-                      onSkillAdded={() => setSkillsRefreshTrigger((prev) => prev + 1)}
-                      onClose={() => onOpenChange(false)}
-                    />
+                    </motion.div>
                   )}
+                </AnimatePresence>
+
+                {/* Providers Tab */}
+                {activeTab === 'providers' && (
+                  <div className="space-y-6">
+                    <section>
+                      <ProviderGrid
+                        settings={settings}
+                        selectedProvider={selectedProvider}
+                        onSelectProvider={handleSelectProvider}
+                        expanded={gridExpanded}
+                        onToggleExpanded={() => setGridExpanded(!gridExpanded)}
+                      />
+                    </section>
+
+                    <AnimatePresence>
+                      {selectedProvider && (
+                        <motion.section
+                          variants={settingsVariants.slideDown}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                          transition={settingsTransitions.enter}
+                        >
+                          <ProviderSettingsPanel
+                            key={selectedProvider}
+                            providerId={selectedProvider}
+                            connectedProvider={settings?.connectedProviders?.[selectedProvider]}
+                            onConnect={handleConnect}
+                            onDisconnect={handleDisconnect}
+                            onModelChange={handleModelChange}
+                            showModelError={showModelError}
+                          />
+                        </motion.section>
+                      )}
+                    </AnimatePresence>
+
+                    <AnimatePresence>
+                      {selectedProvider && (
+                        <motion.section
+                          variants={settingsVariants.slideDown}
+                          initial="initial"
+                          animate="animate"
+                          exit="exit"
+                          transition={{ ...settingsTransitions.enter, delay: 0.05 }}
+                        >
+                          <DebugSection debugMode={debugMode} onDebugToggle={handleDebugToggle} />
+                        </motion.section>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* Skills Tab */}
+                {activeTab === 'skills' && (
+                  <div className="space-y-4">
+                    <SkillsPanel refreshTrigger={skillsRefreshTrigger} />
+                  </div>
+                )}
+
+                {/* Connectors Tab */}
+                {activeTab === 'connectors' && (
+                  <div className="space-y-6">
+                    <ConnectorsPanel />
+                  </div>
+                )}
+
+                {/* Voice Input Tab */}
+                {activeTab === 'voice' && (
+                  <div className="space-y-6">
+                    <SpeechSettingsForm />
+                  </div>
+                )}
+
+                {/* About Tab */}
+                {activeTab === 'about' && (
+                  <AboutTab appVersion={appVersion} accomplish={accomplish} />
+                )}
+
+                {/* Footer: Add (skills only) + Done */}
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    {activeTab === 'skills' && (
+                      <AddSkillDropdown
+                        onSkillAdded={() => setSkillsRefreshTrigger((prev) => prev + 1)}
+                        onClose={() => onOpenChange(false)}
+                      />
+                    )}
+                  </div>
+                  <button
+                    onClick={handleDone}
+                    className="flex items-center gap-2 rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    data-testid="settings-done-button"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    {t('buttons.done')}
+                  </button>
                 </div>
-                <button
-                  onClick={handleDone}
-                  className="flex items-center gap-2 rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                  data-testid="settings-done-button"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {t('buttons.done')}
-                </button>
               </div>
-            </div>
+            </SettingsTabErrorBoundary>
           </div>
         </div>
       </DialogContent>

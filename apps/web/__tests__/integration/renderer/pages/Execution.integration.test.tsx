@@ -305,6 +305,17 @@ describe('Execution Page Integration', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
+    it('should show live progress card while running', () => {
+      mockStoreState.currentTask = createMockTask('task-123', 'Running task', 'running', [
+        createMockMessage('m1', 'assistant', 'Working...'),
+      ]);
+
+      renderWithRouter('task-123');
+
+      expect(screen.getByTestId('execution-live-progress')).toBeInTheDocument();
+      expect(screen.getByText('Live Progress')).toBeInTheDocument();
+    });
+
     it('should display completed status badge for completed task', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Done task', 'completed');
 
@@ -361,6 +372,97 @@ describe('Execution Page Integration', () => {
       renderWithRouter('task-123');
 
       expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+    });
+
+    it('should render swarm child panel when swarm children exist', () => {
+      mockStoreState.currentTask = createMockTask('task-123', 'Swarm run', 'running', [
+        createMockMessage('msg-1', 'assistant', 'Working on subtasks'),
+      ]);
+      mockStoreState.getSwarmChildrenForTask = () => [
+        {
+          childId: 'child-1',
+          role: 'researcher',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'running',
+          outputPreview: 'Collecting requirements',
+        },
+        {
+          childId: 'child-2',
+          role: 'coder',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'completed',
+          outputPreview: 'Implemented patch',
+        },
+      ];
+
+      renderWithRouter('task-123');
+
+      expect(screen.getByTestId('swarm-children-panel')).toBeInTheDocument();
+      expect(screen.getByText('Swarm Progress')).toBeInTheDocument();
+      expect(screen.getByText(/researcher/i)).toBeInTheDocument();
+      expect(screen.getByText(/coder/i)).toBeInTheDocument();
+      expect(screen.getAllByText('openai/gpt-5.2')).toHaveLength(2);
+    });
+
+    it('should show 0% live progress when swarm agents are running but none completed', () => {
+      mockStoreState.currentTask = createMockTask('task-123', 'Swarm run', 'running', [
+        createMockMessage('msg-1', 'assistant', 'Working on subtasks'),
+      ]);
+      mockStoreState.getSwarmChildrenForTask = () => [
+        {
+          childId: 'child-1',
+          role: 'researcher',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'running',
+        },
+        {
+          childId: 'child-2',
+          role: 'coder',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'running',
+        },
+        {
+          childId: 'child-3',
+          role: 'reviewer',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'running',
+        },
+      ];
+
+      renderWithRouter('task-123');
+
+      expect(screen.getByTestId('execution-live-progress')).toBeInTheDocument();
+      expect(screen.getByText('0%')).toBeInTheDocument();
+      expect(screen.getByText('0/3 complete, 3 running')).toBeInTheDocument();
+    });
+
+    it('should expand swarm child details when row is clicked', () => {
+      mockStoreState.currentTask = createMockTask('task-123', 'Swarm run', 'running', [
+        createMockMessage('msg-1', 'assistant', 'Working on subtasks'),
+      ]);
+      mockStoreState.getSwarmChildrenForTask = () => [
+        {
+          childId: 'child-err',
+          role: 'reviewer',
+          providerId: 'openai',
+          modelId: 'gpt-5.2',
+          status: 'failed',
+          error: 'Tool timeout',
+          outputPreview: 'Retry suggested',
+        },
+      ];
+
+      renderWithRouter('task-123');
+
+      fireEvent.click(screen.getByRole('button', { name: /reviewer/i }));
+
+      expect(screen.getByText('Tool timeout')).toBeInTheDocument();
+      expect(screen.getByText('Retry suggested')).toBeInTheDocument();
     });
   });
 
